@@ -4,30 +4,15 @@ document.addEventListener("DOMContentLoaded", () => {
     links.forEach((link) => {
         link.addEventListener("click", (event) => {
             const targetId = link.getAttribute("href");
-
             if (!targetId || targetId === "#") return;
 
             const target = document.querySelector(targetId);
             if (!target) return;
 
             event.preventDefault();
-
-            target.scrollIntoView({
-                behavior: "smooth",
-                block: "start"
-            });
+            target.scrollIntoView({ behavior: "smooth", block: "start" });
         });
     });
-
-    const startButton = document.getElementById("startButton");
-
-    if (startButton) {
-        startButton.addEventListener("click", (event) => {
-            event.preventDefault();
-
-            alert("Doraemon đang được chuẩn bị! 🚀");
-        });
-    }
 
     const animatedElements = document.querySelectorAll(
         ".feature-card, .step, .about-content"
@@ -37,7 +22,6 @@ document.addEventListener("DOMContentLoaded", () => {
         (entries) => {
             entries.forEach((entry) => {
                 if (!entry.isIntersecting) return;
-
                 entry.target.classList.add("is-visible");
                 observer.unobserve(entry.target);
             });
@@ -50,12 +34,10 @@ document.addEventListener("DOMContentLoaded", () => {
         element.style.transform = "translateY(20px)";
         element.style.transition =
             "opacity 0.6s ease, transform 0.6s ease";
-
         observer.observe(element);
     });
 
     const style = document.createElement("style");
-
     style.textContent = `
         .feature-card.is-visible,
         .step.is-visible,
@@ -64,6 +46,5 @@ document.addEventListener("DOMContentLoaded", () => {
             transform: translateY(0) !important;
         }
     `;
-
     document.head.appendChild(style);
 });
