@@ -216,7 +216,7 @@ function renderBlock(block) {
 }
 function renderMessages() {
   const list = $("#chatMessages"); if (!list) return;
-  list.innerHTML = state.messages.map((m, idx)=>`<div class="chat-row ${m.role==='user'?'user':'model'}"><div class="chat-avatar">${m.role==='user'?'Bạn':'D'}</div><div class="chat-bubble"><div class="chat-role">${m.role==='user'?'Bạn':'Doraemon'}</div>${m.blocks.map(renderBlock).join("")}</div></div>`).join("");
+  list.innerHTML = state.messages.map((m, idx)=>`<div class="chat-row ${m.role==='user'?'user':'model'}"><div class="chat-avatar ${m.role==='model'?'chat-avatar-doraemon':''}">${m.role==='user'?'Bạn':'<img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy">'}</div><div class="chat-bubble"><div class="chat-role">${m.role==='user'?'Bạn':'Doraemon'}</div>${m.blocks.map(renderBlock).join("")}</div></div>`).join("");
   $$(".chat-choice", list).forEach(btn => btn.addEventListener("click", () => sendAction(btn.dataset.action, btn.dataset.display || btn.dataset.label)));
   list.scrollTop = list.scrollHeight;
 }
@@ -267,7 +267,7 @@ async function startWelcome() {
 async function renderChat(el) {
   el.innerHTML = `<div class="study-grid">
     <aside class="study-library page-card"><div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">Đang học</span></div><div class="loading">Đang tải nội dung…</div><div class="library-note">💡 Chọn bài để Doraemon mở đúng ngữ cảnh học. Trạng thái chi tiết của Giáo trình nằm trong menu <b>Thông tin người học → Giáo trình</b>.</div></aside>
-    <section class="chat-panel page-card"><div class="chat-toolbar"><div class="chat-toolbar-copy"><span class="section-label">PHIÊN HỌC</span><strong>Học cùng Doraemon</strong><small>Doraemon hướng dẫn, giải thích, đặt câu hỏi và phản hồi ngay trong cùng một phòng học.</small></div><div class="chat-teacher"><div class="chat-teacher-avatar"><img src="assets/doraemon-teacher.png" alt="Doraemon đang dạy học"></div><div><strong>Doraemon</strong><span>Đang dạy bạn học 📚</span></div></div><button class="small-button" id="newChatBtn">＋ Phiên mới</button></div><div class="chat-messages" id="chatMessages"></div><div class="chat-composer"><textarea id="chatInput" rows="1" placeholder="Hỏi Doraemon hoặc trả lời câu hỏi…"></textarea><button class="send-button" id="sendBtn" aria-label="Gửi tin nhắn">➤</button></div><div class="composer-hint">Enter để gửi · Shift+Enter để xuống dòng · Có thể dán ảnh bài tập vào ô chat</div></section>
+    <section class="chat-panel page-card"><div class="chat-toolbar"><div class="chat-toolbar-copy"><span class="section-label">PHIÊN HỌC</span><strong>Học cùng Doraemon</strong><small>Doraemon hướng dẫn, giải thích, đặt câu hỏi và phản hồi ngay trong cùng một phòng học.</small></div><button class="small-button" id="newChatBtn">＋ Phiên mới</button></div><div class="chat-messages" id="chatMessages"></div><div class="chat-composer"><textarea id="chatInput" rows="1" placeholder="Hỏi Doraemon hoặc trả lời câu hỏi…"></textarea><button class="send-button" id="sendBtn" aria-label="Gửi tin nhắn">➤</button></div><div class="composer-hint">Enter để gửi · Shift+Enter để xuống dòng · Có thể dán ảnh bài tập vào ô chat</div></section>
   </div>`;
   try {
     const data = await api(`/learning/catalog${state.selectedCourseId ? `?course_id=${encodeURIComponent(state.selectedCourseId)}` : ""}`);
@@ -315,21 +315,21 @@ async function renderCurriculum(el){
     api(`/learning/catalog${state.selectedCourseId ? `?course_id=${encodeURIComponent(state.selectedCourseId)}` : ""}`),
     api("/learning/summary")
   ]);
-  const docs=(catalog.documents||[]).filter(x=>String(x.content_type||"").trim().casefold()==="giáo trình");
+  const docs=(catalog.documents||[]).filter(x=>String(x.content_type||"").trim().toLocaleLowerCase("vi-VN")==="giáo trình");
   const progress=summary.learning_history||[];
   const statusRank={completed:3,done:3,in_progress:2,active:2,review:2,needs_review:2};
   const progressMap=new Map();
   for(const row of progress){
     const cid=row.course_id!=null?String(row.course_id):"";
-    const key=`${cid}|${String(row.content_type||"").trim().casefold()}|${String(row.lesson||"").trim().casefold()}|${String(row.topic||"").trim().casefold()}`;
+    const key=`${cid}|${String(row.content_type||"").trim().toLocaleLowerCase("vi-VN")}|${String(row.lesson||"").trim().toLocaleLowerCase("vi-VN")}|${String(row.topic||"").trim().toLocaleLowerCase("vi-VN")}`;
     const prev=progressMap.get(key);
-    const score=statusRank[String(row.status||"").trim().casefold()]||0;
-    const prevScore=prev?(statusRank[String(prev.status||"").trim().casefold()]||0):-1;
+    const score=statusRank[String(row.status||"").trim().toLocaleLowerCase("vi-VN")]||0;
+    const prevScore=prev?(statusRank[String(prev.status||"").trim().toLocaleLowerCase("vi-VN")]||0):-1;
     if(!prev || score>=prevScore) progressMap.set(key,row);
   }
   const statusText=row=>{
     if(!row) return {label:"Chưa học",cls:"not-started",icon:"○"};
-    const st=String(row.status||"").trim().casefold();
+    const st=String(row.status||"").trim().toLocaleLowerCase("vi-VN");
     if(st==="completed"||st==="done") return {label:"Đã học",cls:"completed",icon:"✓"};
     if(["in_progress","active","review","needs_review"].includes(st)) return {label:"Đang học dở",cls:"in-progress",icon:"↻"};
     return {label:"Chưa học",cls:"not-started",icon:"○"};
@@ -337,7 +337,7 @@ async function renderCurriculum(el){
   const rows=uniqRows(docs);
   const counts={"completed":0,"in-progress":0,"not-started":0};
   const cards=rows.map(r=>{
-    const key=`${r.course_id!=null?String(r.course_id):""}|giáo trình|${String(r.lesson||"").trim().casefold()}|${String(r.topic||"").trim().casefold()}`;
+    const key=`${r.course_id!=null?String(r.course_id):""}|giáo trình|${String(r.lesson||"").trim().toLocaleLowerCase("vi-VN")}|${String(r.topic||"").trim().toLocaleLowerCase("vi-VN")}`;
     const st=statusText(progressMap.get(key)); counts[st.cls]++;
     return `<button class="curriculum-row" data-lesson="${escapeHtml(r.lesson||"")}" data-type="Giáo trình" data-topic="${escapeHtml(r.topic||"")}"><span class="curriculum-icon ${st.cls}">${st.icon}</span><span class="curriculum-main"><strong>${escapeHtml(r.lesson||"")}</strong>${r.topic?`<small>${escapeHtml(r.topic)}</small>`:""}</span><span class="curriculum-status ${st.cls}">${st.label}</span><span class="curriculum-open">Học →</span></button>`;
   }).join("");
