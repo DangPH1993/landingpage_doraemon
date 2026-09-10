@@ -1,6 +1,6 @@
 /* Doraemon Web v3 — typography */
 :root{
-  --font-sans:"Roboto",Arial,sans-serif;
+  --font-sans:Arial,"Helvetica Neue",Helvetica,sans-serif;
 }
 /* Force the web UI typography to Roboto, including all labels, chips,
    generated app content, buttons and drawer text. */
