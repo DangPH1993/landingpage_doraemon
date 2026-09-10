@@ -13,7 +13,6 @@ const state = {
   chatHistory: [],
   messages: [],
   courses: [],
-  autoChatTimer: null,
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -97,7 +96,7 @@ async function register(phone, nickname, password) {
 }
 function logout(showToast = true) {
   state.token = ""; state.profile = null; state.courses = []; state.chatHistory = []; state.messages = []; state.chatboxNew = true;
-  localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(PROFILE_KEY); stopAutoChat();
+  localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(PROFILE_KEY);
   if (showToast) toast("Đã đăng xuất", "success");
   location.hash = "#";
 }
@@ -130,6 +129,7 @@ function renderAppShell() {
           <button class="learner-menu-button" id="learnerMenuBtn" aria-expanded="false"><span class="avatar">${initial}</span><span class="learner-menu-copy"><strong>${userName}</strong><small>${escapeHtml(sub.plan || "Free")}</small></span><span class="chevron">⌄</span></button>
           <div class="learner-menu hidden" id="learnerMenu">
             <div class="learner-menu-head"><div class="avatar large">${initial}</div><div><strong>${userName}</strong><small>${escapeHtml(state.profile?.phone || "")}</small></div></div>
+            <button data-panel="curriculum">📖 <span>Giáo trình</span></button>
             <button data-panel="plan">🎯 <span>Lộ trình học</span></button>
             <button data-panel="review">🔄 <span>Nội dung ôn tập</span></button>
             <button data-panel="admin">🛟 <span>Chat với admin</span></button>
@@ -172,12 +172,12 @@ function renderAppShell() {
 function openLearnerPanel(view) {
   const panel = $("#profilePanel");
   if (!panel) return;
-  const titles = {plan:"Lộ trình học",review:"Nội dung ôn tập",admin:"Chat với admin",packages:"Gói học",settings:"Cấu hình học tập"};
+  const titles = {curriculum:"Giáo trình",plan:"Lộ trình học",review:"Nội dung ôn tập",admin:"Chat với admin",packages:"Gói học",settings:"Cấu hình học tập"};
   panel.innerHTML = `<div class="profile-panel-backdrop" data-close-panel></div><section class="profile-drawer"><header class="drawer-head"><div><span class="section-label">THÔNG TIN NGƯỜI HỌC</span><h2>${escapeHtml(titles[view]||"Thông tin")}</h2></div><button class="modal-close" data-close-panel>×</button></header><div id="profilePanelContent" class="drawer-content"><div class="loading"><span></span><span></span><span></span>Đang tải...</div></div></section>`;
   panel.classList.remove("hidden"); panel.setAttribute("aria-hidden","false");
   $$('[data-close-panel]', panel).forEach(x => x.addEventListener("click", closeLearnerPanel));
   const el = $("#profilePanelContent");
-  Promise.resolve({plan:renderPlan,review:renderReview,admin:renderAdmin,packages:renderPackages,settings:renderSettings}[view]?.(el)).catch(e => { el.innerHTML = `<div class="empty-state error">${escapeHtml(e.message)}</div>`; });
+  Promise.resolve({curriculum:renderCurriculum,plan:renderPlan,review:renderReview,admin:renderAdmin,packages:renderPackages,settings:renderSettings}[view]?.(el)).catch(e => { el.innerHTML = `<div class="empty-state error">${escapeHtml(e.message)}</div>`; });
 }
 function closeLearnerPanel() { const p=$("#profilePanel"); if(!p)return; p.classList.add("hidden"); p.setAttribute("aria-hidden","true"); window.clearInterval(window.__adminPoll); }
 function navItem(view, icon, label) { return `<button class="side-nav-item ${state.view===view?"active":""}" data-view="${view}"><span>${icon}</span>${label}</button>`; }
@@ -265,28 +265,27 @@ async function startWelcome() {
 }
 
 async function renderChat(el) {
-  const data = await api(`/learning/catalog${state.selectedCourseId ? `?course_id=${encodeURIComponent(state.selectedCourseId)}` : ""}`);
-  const docs=data.documents||[]; const grouped={};
-  docs.forEach(r=>{const ct=r.content_type||"Nội dung"; const lesson=r.lesson||""; if(!lesson)return;(grouped[ct]??=[]).push(r);});
-  const types=["Giáo trình","Từ vựng","Ngữ pháp","Bài tập","Truyện đọc",...Object.keys(grouped).filter(x=>!["Giáo trình","Từ vựng","Ngữ pháp","Bài tập","Truyện đọc"].includes(x))];
-  const sections=types.filter(t=>grouped[t]?.length).map(t=>`<div class="lesson-section"><div class="lesson-section-head"><span>${iconType(t)} ${escapeHtml(t)}</span><small>${new Set(grouped[t].map(x=>`${x.lesson}|${x.topic||""}`)).size} bài</small></div>${uniqRows(grouped[t]).slice(0,14).map(r=>`<button class="lesson-card compact" data-lesson="${escapeHtml(r.lesson)}" data-type="${escapeHtml(r.content_type)}" data-topic="${escapeHtml(r.topic||"")}"><div><strong>${escapeHtml(r.lesson)}</strong><small>${escapeHtml(r.topic||"")}</small></div><span>Học →</span></button>`).join("")}</div>`).join("");
   el.innerHTML = `<div class="study-grid">
-    <aside class="study-library page-card"><div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">${docs.length} mục</span></div>${sections || `<div class="empty-state">Chưa có nội dung được cấp quyền.</div>`}<div class="library-note">💡 Chọn bài để Doraemon tự mở đúng ngữ cảnh học. Các bài đang học sẽ tiếp tục ngay trong khung chat.</div></aside>
-    <section class="chat-panel page-card"><div class="chat-toolbar"><div><span class="section-label">PHIÊN HỌC</span><strong>Học cùng Doraemon</strong><small>Doraemon hướng dẫn, giải thích, đặt câu hỏi và phản hồi ngay trong cùng một phòng học.</small></div><button class="small-button" id="newChatBtn">＋ Phiên mới</button></div><div class="chat-messages" id="chatMessages"></div><div class="chat-composer"><textarea id="chatInput" rows="1" placeholder="Hỏi Doraemon hoặc trả lời câu hỏi…"></textarea><button class="send-button" id="sendBtn" aria-label="Gửi tin nhắn">➤</button></div><div class="composer-hint">Enter để gửi · Shift+Enter để xuống dòng · Có thể dán ảnh bài tập vào ô chat</div></section>
+    <aside class="study-library page-card"><div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">Đang học</span></div><div class="loading">Đang tải nội dung…</div><div class="library-note">💡 Chọn bài để Doraemon mở đúng ngữ cảnh học. Trạng thái chi tiết của Giáo trình nằm trong menu <b>Thông tin người học → Giáo trình</b>.</div></aside>
+    <section class="chat-panel page-card"><div class="chat-toolbar"><div class="chat-toolbar-copy"><span class="section-label">PHIÊN HỌC</span><strong>Học cùng Doraemon</strong><small>Doraemon hướng dẫn, giải thích, đặt câu hỏi và phản hồi ngay trong cùng một phòng học.</small></div><div class="chat-teacher"><div class="chat-teacher-avatar"><img src="assets/doraemon-teacher.png" alt="Doraemon đang dạy học"></div><div><strong>Doraemon</strong><span>Đang dạy bạn học 📚</span></div></div><button class="small-button" id="newChatBtn">＋ Phiên mới</button></div><div class="chat-messages" id="chatMessages"></div><div class="chat-composer"><textarea id="chatInput" rows="1" placeholder="Hỏi Doraemon hoặc trả lời câu hỏi…"></textarea><button class="send-button" id="sendBtn" aria-label="Gửi tin nhắn">➤</button></div><div class="composer-hint">Enter để gửi · Shift+Enter để xuống dòng · Có thể dán ảnh bài tập vào ô chat</div></section>
   </div>`;
+  try {
+    const data = await api(`/learning/catalog${state.selectedCourseId ? `?course_id=${encodeURIComponent(state.selectedCourseId)}` : ""}`);
+    const docs=data.documents||[]; const grouped={};
+    docs.forEach(r=>{const ct=r.content_type||"Nội dung"; const lesson=r.lesson||""; if(!lesson)return;(grouped[ct]??=[]).push(r);});
+    const types=["Giáo trình","Từ vựng","Ngữ pháp","Bài tập","Truyện đọc",...Object.keys(grouped).filter(x=>!["Giáo trình","Từ vựng","Ngữ pháp","Bài tập","Truyện đọc"].includes(x))];
+    const sections=types.filter(t=>grouped[t]?.length).map(t=>`<div class="lesson-section"><div class="lesson-section-head"><span>${iconType(t)} ${escapeHtml(t)}</span><small>${new Set(grouped[t].map(x=>`${x.lesson}|${x.topic||""}`)).size} bài</small></div>${uniqRows(grouped[t]).slice(0,14).map(r=>`<button class="lesson-card compact" data-lesson="${escapeHtml(r.lesson)}" data-type="${escapeHtml(r.content_type)}" data-topic="${escapeHtml(r.topic||"")}"><div><strong>${escapeHtml(r.lesson)}</strong><small>${escapeHtml(r.topic||"")}</small></div><span>Học →</span></button>`).join("")}</div>`).join("");
+    $(".study-library").innerHTML = `<div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">${docs.length} mục</span></div>${sections || `<div class="empty-state">Chưa có nội dung được cấp quyền.</div>`}<div class="library-note">💡 Chọn bài để Doraemon mở đúng ngữ cảnh học. Trạng thái chi tiết của Giáo trình nằm trong menu <b>Thông tin người học → Giáo trình</b>.</div>`;
+  } catch (e) {
+    $(".study-library").innerHTML = `<div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div></div><div class="empty-state error">${escapeHtml(e.message)}</div>`;
+  }
   renderMessages();
   $("#newChatBtn").onclick = () => { state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`; state.chatboxNew=true; state.messages=[]; state.chatHistory=[]; startWelcome(); };
-  const input=$("#chatInput"); const send=()=>{const v=input.value.trim(); if(!v)return; input.value=""; autoGrow(input); sendChat(v);}; $("#sendBtn").onclick=send; input.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();} }); input.addEventListener("input",()=>autoGrow(input)); input.addEventListener("paste",e=>{ const item=[...(e.clipboardData?.items||[])].find(x=>x.type.startsWith("image/")); if(item){const f=item.getAsFile(); if(f)sendFileImage(f);} });
+  const input=$("#chatInput"); const send=()=>{const v=input.value.trim(); if(!v)return; input.value=""; autoGrow(input); sendChat(v);}; $("#sendBtn").onclick=send; input.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();} }); input.addEventListener("input",()=>autoGrow(input));
   $$(".lesson-card", el).forEach(x=>x.onclick=()=>startLesson(x.dataset.lesson,x.dataset.type,x.dataset.topic||""));
   if (!state.messages.length) await startWelcome();
-  startAutoChat();
 }
 function autoGrow(el){el.style.height="auto";el.style.height=Math.min(160,el.scrollHeight)+"px";}
-function readFileAsBase64(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(String(r.result).split(",")[1]||"");r.onerror=reject;r.readAsDataURL(file);});}
-async function sendFileImage(file){const b64=await readFileAsBase64(file); await sendChat("Hãy phân tích hình ảnh bài học/bài tập này và giúp mình.",b64,false,null,`📎 ${file.name}`);}
-function startAutoChat(){ stopAutoChat(); const enabled=localStorage.getItem("doraemon_auto_chat")==="1"; if(!enabled)return; state.autoChatTimer=setTimeout(async()=>{ if(state.view!=="chat")return; try{ const r=await api(`/learning/review/reminder${state.selectedCourseId?`?course_id=${state.selectedCourseId}`:""}`); if(r.review_available&&r.content_blocks?.length){ state.messages.push({role:"model",blocks:r.content_blocks}); renderMessages(); return; } }catch{} await sendChat("Đây là một lời bắt chuyện ngắn của Doraemon với người học. Nếu ngữ cảnh có Study Plan thì ưu tiên nhắc tiến độ, động viên khi đúng tiến độ, chúc mừng khi vượt tiến độ, hoặc nhắc nhẹ khi chậm. Nếu không có Study Plan thì chỉ bắt chuyện thân thiện. KHÔNG dạy bài, KHÔNG hỏi menu học gì, KHÔNG tạo bài tập và KHÔNG đưa đáp án. Chỉ trả lời 1 câu ngắn bằng tiếng Việt.",null,true); startAutoChat(); }, 10*60*1000); }
-function stopAutoChat(){if(state.autoChatTimer){clearTimeout(state.autoChatTimer);state.autoChatTimer=null;}}
-
 async function renderCatalog(el){
   const data=await api(`/learning/catalog${state.selectedCourseId ? `?course_id=${encodeURIComponent(state.selectedCourseId)}` : ""}`);
   const docs=data.documents||[]; const grouped={}; docs.forEach(r=>{const ct=r.content_type||"Nội dung"; const lesson=r.lesson||""; if(!lesson)return;(grouped[ct]??=[]).push(r);});
@@ -311,6 +310,42 @@ async function startLesson(lesson,type,topic=""){
   await sendChat("",null,false,action,display);
 }
 
+async function renderCurriculum(el){
+  const [catalog, summary] = await Promise.all([
+    api(`/learning/catalog${state.selectedCourseId ? `?course_id=${encodeURIComponent(state.selectedCourseId)}` : ""}`),
+    api("/learning/summary")
+  ]);
+  const docs=(catalog.documents||[]).filter(x=>String(x.content_type||"").trim().casefold()==="giáo trình");
+  const progress=summary.learning_history||[];
+  const statusRank={completed:3,done:3,in_progress:2,active:2,review:2,needs_review:2};
+  const progressMap=new Map();
+  for(const row of progress){
+    const cid=row.course_id!=null?String(row.course_id):"";
+    const key=`${cid}|${String(row.content_type||"").trim().casefold()}|${String(row.lesson||"").trim().casefold()}|${String(row.topic||"").trim().casefold()}`;
+    const prev=progressMap.get(key);
+    const score=statusRank[String(row.status||"").trim().casefold()]||0;
+    const prevScore=prev?(statusRank[String(prev.status||"").trim().casefold()]||0):-1;
+    if(!prev || score>=prevScore) progressMap.set(key,row);
+  }
+  const statusText=row=>{
+    if(!row) return {label:"Chưa học",cls:"not-started",icon:"○"};
+    const st=String(row.status||"").trim().casefold();
+    if(st==="completed"||st==="done") return {label:"Đã học",cls:"completed",icon:"✓"};
+    if(["in_progress","active","review","needs_review"].includes(st)) return {label:"Đang học dở",cls:"in-progress",icon:"↻"};
+    return {label:"Chưa học",cls:"not-started",icon:"○"};
+  };
+  const rows=uniqRows(docs);
+  const counts={"completed":0,"in-progress":0,"not-started":0};
+  const cards=rows.map(r=>{
+    const key=`${r.course_id!=null?String(r.course_id):""}|giáo trình|${String(r.lesson||"").trim().casefold()}|${String(r.topic||"").trim().casefold()}`;
+    const st=statusText(progressMap.get(key)); counts[st.cls]++;
+    return `<button class="curriculum-row" data-lesson="${escapeHtml(r.lesson||"")}" data-type="Giáo trình" data-topic="${escapeHtml(r.topic||"")}"><span class="curriculum-icon ${st.cls}">${st.icon}</span><span class="curriculum-main"><strong>${escapeHtml(r.lesson||"")}</strong>${r.topic?`<small>${escapeHtml(r.topic)}</small>`:""}</span><span class="curriculum-status ${st.cls}">${st.label}</span><span class="curriculum-open">Học →</span></button>`;
+  }).join("");
+  el.innerHTML=`<section class="page-card curriculum-card"><div class="card-head"><div><strong>📖 Giáo trình</strong><small>Xem trạng thái từng bài trong khóa học đang chọn</small></div><button class="small-button" id="curriculumRefresh">↻ Làm mới</button></div><div class="curriculum-summary"><div><strong>${rows.length}</strong><span>Tổng bài</span></div><div><strong>${counts["in-progress"]}</strong><span>Đang học</span></div><div><strong>${counts.completed}</strong><span>Đã học</span></div><div><strong>${counts["not-started"]}</strong><span>Chưa học</span></div></div><div class="curriculum-list">${cards||`<div class="empty-state">Chưa có bài Giáo trình được cấp quyền cho khóa học này.</div>`}</div></section>`;
+  $("#curriculumRefresh").onclick=()=>renderCurriculum(el);
+  $$(".curriculum-row",el).forEach(btn=>btn.onclick=async()=>{closeLearnerPanel();await startLesson(btn.dataset.lesson,"Giáo trình",btn.dataset.topic||"");});
+}
+
 async function renderPlan(el){const data=await api(`/learning/plan${state.selectedCourseId?`?course_id=${state.selectedCourseId}`:""}`); const plans=data.plans||[]; const plan=data.plan||null; const draft=data.draft||null; el.innerHTML=`<div class="page-grid"><section class="page-card"><div class="card-head"><div><strong>Lộ trình học</strong><small>${data.learning_mode==='planned'?'Đang học theo lộ trình':'Học tự do'}</small></div><button class="small-button" id="planChat">✦ Điều chỉnh bằng chat</button></div>${plans.length?plans.map(p=>`<div class="plan-card"><div class="plan-icon">🎯</div><div class="plan-main"><strong>${escapeHtml(p.goal_name||"Lộ trình")}</strong><span>${escapeHtml(p.content_type||"")} · ${escapeHtml(p.scope||"")}</span><small>Bắt đầu: ${escapeHtml(p.start_date||"—")} ${p.target_date?` · Mục tiêu: ${escapeHtml(p.target_date)}`:""}</small></div><button class="danger-button" data-delete-plan="${p.id}">Xóa</button></div>`).join(""): `<div class="empty-state">${draft?"Bạn có một lộ trình nháp. Hãy vào chat để xác nhận lộ trình.":"Chưa có lộ trình hoạt động. Hãy mở chat và chọn <b>Học theo lộ trình</b>."}</div>`}</section><aside class="page-card"><h3>📊 Trạng thái</h3><div class="stat-grid"><div><strong>${plans.length}</strong><span>Plan active</span></div><div><strong>${escapeHtml(data.learning_mode||"free")}</strong><span>Chế độ</span></div></div>${plan?`<div class="mini-note">${escapeHtml(plan.goal_name||"")}</div>`:""}</aside></div>`; $("#planChat").onclick=async()=>{state.view="chat"; closeLearnerPanel(); await renderChat($("#appContent"));}; $$("[data-delete-plan]").forEach(b=>b.onclick=async()=>{if(!confirm("Xóa lộ trình này?"))return;try{await api(`/learning/plan/${b.dataset.deletePlan}`,{method:"DELETE"});toast("Đã xóa lộ trình","success");await renderPlan($("#appContent"));}catch(e){toast(e.message,"error");}});}
 
 async function renderReview(el){const d=await api(`/learning/review/today${state.selectedCourseId?`?course_id=${state.selectedCourseId}`:""}`);const items=d.review_items||[];const scheduled=d.scheduled_lessons||[];el.innerHTML=`<div class="page-grid"><section class="page-card"><div class="card-head"><div><strong>Nội dung cần ôn tập</strong><small>${items.length?`${items.length} mục đang chờ ôn`:"Chưa có mục sai để ôn"}</small></div><div class="button-row-inline"><button class="small-button" id="reviewStart">Bắt đầu ôn</button><button class="small-button" id="reviewChat">Ôn bằng chat</button></div></div>${items.length?`<div class="review-list">${items.map(x=>`<div class="review-item"><div class="review-badge">${x.item_type==='vocabulary'?'Từ':'Ngữ'}</div><div><strong>${escapeHtml(x.label||x.pattern||x.item_id)}</strong><small>${escapeHtml(x.lesson||"")} · ${escapeHtml(x.meaning||x.explanation||"")}</small></div><span>📅 ${escapeHtml(fmtDate(x.next_review_at))}</span></div>`).join("")}`:`<div class="empty-state success">✅ Hiện chưa có nội dung cần ôn. Nội dung chỉ được thêm sau khi cậu trả lời sai trong review.</div>`}</section><aside class="page-card"><h3>📆 Lịch ôn</h3>${scheduled.length?scheduled.slice(0,8).map(x=>`<div class="schedule-row"><strong>${escapeHtml(x.lesson||"Bài")}</strong><span>${escapeHtml(x.content_type||"")}</span><small>${escapeHtml(fmtDate(x.next_review_at))}</small></div>`).join(""):`<div class="empty-state">Chưa có lịch ôn.</div>`}</aside></div>`;$("#reviewStart").onclick=()=>startReviewQuiz();$("#reviewChat").onclick=()=>startReviewChat();}
@@ -323,8 +358,12 @@ async function renderAdmin(el){const data=await api("/admin-chat/history?limit=2
 function renderAdminMessage(m){return `<div class="admin-msg ${m.sender==='user'?'me':''}"><div class="admin-msg-author">${m.sender==='user'?'Bạn':'Admin'}</div><div class="admin-msg-body">${nl2br(m.message||"")}</div><small>${escapeHtml(fmtDate(m.created_at))}</small></div>`;}
 async function sendAdmin(){const input=$("#adminInput"); const msg=input?.value.trim(); if(!msg)return; input.value=""; try{await api("/admin-chat/send",{method:"POST",body:{client_message_id:(crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`),message:msg}});const d=await api("/admin-chat/history?limit=200");$("#adminMessages").innerHTML=(d.messages||[]).map(renderAdminMessage).join("");$("#adminMessages").scrollTop=$("#adminMessages").scrollHeight;}catch(e){toast(e.message,"error");}}
 
-async function renderSettings(el){const me=state.__me||await api("/auth/me");let settings={review_interval_days:1};try{settings=await api("/learning/review/settings");}catch{}const auto=localStorage.getItem("doraemon_auto_chat")==="1"; el.innerHTML=`<div class="settings-grid"><section class="page-card"><div class="card-head"><div><strong>Cấu hình học tập</strong><small>Thiết lập giống các tùy chọn chính của App</small></div></div><label class="setting-row"><div><strong>Khóa học đang học</strong><small>Chat và review sẽ dùng course này</small></div><select id="settingsCourse">${(me.subscription?.courses||[]).map(c=>`<option value="${c.course_id}" ${String(c.course_id)===String(state.selectedCourseId)?"selected":""}>${escapeHtml(c.name)}</option>`).join("")}</select></label><label class="setting-row"><div><strong>Ôn tập lại sau</strong><small>Số ngày sau khi hoàn thành nội dung</small></div><input id="reviewDays" type="number" min="1" max="365" value="${Number(settings.review_interval_days||1)}"></label><label class="toggle-row"><div><strong>Tự động bắt chuyện</strong><small>Trên Web, nhắc tự động chỉ chạy khi tab Doraemon đang mở.</small></div><input id="autoChatToggle" type="checkbox" ${auto?"checked":""}></label><div class="button-row"><button class="button button-primary" id="saveSettings">Lưu cấu hình</button><button class="button button-secondary" id="resetLearning">🗑 Xóa lịch sử học</button></div></section><aside class="page-card"><h3>👤 Tài khoản</h3><div class="profile-line"><span>Nickname</span><strong>${escapeHtml(me.user?.nickname||"")}</strong></div><div class="profile-line"><span>SĐT</span><strong>${escapeHtml(me.user?.phone||"")}</strong></div><div class="profile-line"><span>Gói</span><strong>${escapeHtml(me.subscription?.plan||"Free")}</strong></div></aside></div>`;
-  $("#saveSettings").onclick=async()=>{try{const cid=Number($("#settingsCourse").value||0); if(cid){const d=await api("/learning/select-course",{method:"POST",body:{course_id:cid}});state.selectedCourseId=d.course_id;state.selectedCourseName=d.course_name;} await api("/learning/review/settings",{method:"POST",body:{review_interval_days:Number($("#reviewDays").value||1)}}); localStorage.setItem("doraemon_auto_chat",$("#autoChatToggle").checked?"1":"0"); toast("Đã lưu cấu hình","success"); closeLearnerPanel(); await renderChat($("#appContent"));}catch(e){toast(e.message,"error");}};
+async function renderSettings(el){
+  const me=state.__me||await api("/auth/me");
+  let settings={review_interval_days:1};
+  try{settings=await api("/learning/review/settings");}catch{}
+  el.innerHTML=`<div class="settings-grid"><section class="page-card"><div class="card-head"><div><strong>Cấu hình học tập</strong><small>Thiết lập các tùy chọn học tập chính</small></div></div><label class="setting-row"><div><strong>Khóa học đang học</strong><small>Chat và review sẽ dùng course này</small></div><select id="settingsCourse">${(me.subscription?.courses||[]).map(c=>`<option value="${c.course_id}" ${String(c.course_id)===String(state.selectedCourseId)?"selected":""}>${escapeHtml(c.name)}</option>`).join("")}</select></label><label class="setting-row"><div><strong>Ôn tập lại sau</strong><small>Số ngày sau khi hoàn thành nội dung</small></div><input id="reviewDays" type="number" min="1" max="365" value="${Number(settings.review_interval_days||1)}"></label><div class="button-row"><button class="button button-primary" id="saveSettings">Lưu cấu hình</button><button class="button button-secondary" id="resetLearning">🗑 Xóa lịch sử học</button></div></section><aside class="page-card"><h3>👤 Tài khoản</h3><div class="profile-line"><span>Nickname</span><strong>${escapeHtml(me.user?.nickname||"")}</strong></div><div class="profile-line"><span>SĐT</span><strong>${escapeHtml(me.user?.phone||"")}</strong></div><div class="profile-line"><span>Gói</span><strong>${escapeHtml(me.subscription?.plan||"Free")}</strong></div></aside></div>`;
+  $("#saveSettings").onclick=async()=>{try{const cid=Number($("#settingsCourse").value||0); if(cid){const d=await api("/learning/select-course",{method:"POST",body:{course_id:cid}});state.selectedCourseId=d.course_id;state.selectedCourseName=d.course_name;} await api("/learning/review/settings",{method:"POST",body:{review_interval_days:Number($("#reviewDays").value||1)}}); toast("Đã lưu cấu hình","success"); closeLearnerPanel(); await renderChat($("#appContent"));}catch(e){toast(e.message,"error");}};
   $("#resetLearning").onclick=async()=>{if(!confirm("Xóa toàn bộ tiến độ, review và lộ trình học? Tài khoản và gói học không bị xóa."))return;try{await api("/learning/reset",{method:"POST"});toast("Đã xóa lịch sử học","success");state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;state.chatboxNew=true;state.messages=[];state.chatHistory=[];state.view="chat"; closeLearnerPanel(); await renderChat($("#appContent"));}catch(e){toast(e.message,"error");}};
 }
 
