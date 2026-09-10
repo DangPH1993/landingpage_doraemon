@@ -2,8 +2,13 @@
 :root{
   --font-sans:"Roboto",Arial,sans-serif;
 }
-html,body,button,input,textarea,select{font-family:var(--font-sans);}
+/* Force the web UI typography to Roboto, including all labels, chips,
+   generated app content, buttons and drawer text. */
+html,body,* ,*::before,*::after{font-family:var(--font-sans) !important;}
+button,input,textarea,select{font:inherit;}
 body{font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;}
+/* Emojis should still use the platform emoji fallback when Roboto has no glyph. */
+.emoji,.feature-icon,.floating-icon,.step-icon,.cta-icon,.chat-avatar,.chat-choice,.send-button{font-family:var(--font-sans) !important;}
 .chat-bubble,.chat-text,.chat-choice,.lesson-card,.study-library,.chat-composer{letter-spacing:-0.01em;}
 
 :root{--bg:#f7faff;--surface:#fff;--ink:#172033;--muted:#64748b;--line:#dce5ef;--primary:#2563eb;--primary2:#4f46e5;--success:#16a34a;--danger:#dc2626;--shadow:0 18px 50px rgba(26,50,90,.10);--radius:20px}
