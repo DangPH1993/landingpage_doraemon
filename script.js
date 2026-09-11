@@ -31,9 +31,9 @@ function nl2br(value) { return escapeHtml(value).replace(/\n/g, "<br>"); }
 // Never inject arbitrary HTML into the learner page.
 function decodeHtmlEntities(value) {
   let out = String(value ?? "");
-  // Older drafts may have been escaped more than once. Decode only a couple
-  // of layers; never treat arbitrary user HTML as trusted without sanitizing.
-  for (let i = 0; i < 2; i++) {
+  // Some legacy drafts were escaped 3+ times. Decode until stable (bounded)
+  // before the allow-list sanitizer renders the rich text.
+  for (let i = 0; i < 6; i++) {
     const ta = document.createElement("textarea");
     ta.innerHTML = out;
     const next = ta.value;
@@ -63,6 +63,28 @@ function sanitizeRichText(value) {
   const box = document.createElement("div");
   box.innerHTML = src;
   box.querySelectorAll("script,style,iframe,object,embed,link,meta,form,input,button,textarea,select,img,audio,video,svg,math").forEach(el => el.remove());
+
+  // Force persisted newlines to remain visible even when the rich-text HTML
+  // contains inline tags such as <b>/<i>/<u>. Browser HTML parsing normally
+  // collapses raw newline characters when white-space is not inherited as
+  // expected. Convert newline characters inside text nodes to explicit <br>
+  // nodes so paragraph breaks survive every rendering path.
+  const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+  const textNodes = [];
+  let tn;
+  while ((tn = walker.nextNode())) textNodes.push(tn);
+  textNodes.forEach(node => {
+    const value = node.nodeValue || "";
+    if (!/[\n\r]/.test(value)) return;
+    const frag = document.createDocumentFragment();
+    const parts = value.replace(/\r\n?/g, "\n").split("\n");
+    parts.forEach((part, idx) => {
+      if (part) frag.appendChild(document.createTextNode(part));
+      if (idx < parts.length - 1) frag.appendChild(document.createElement("br"));
+    });
+    node.parentNode?.replaceChild(frag, node);
+  });
+
   box.querySelectorAll("*").forEach(el => {
     const tag = el.tagName.toLowerCase();
     const allowed = new Set(["b","strong","i","em","u","br","p","div","span"]);
