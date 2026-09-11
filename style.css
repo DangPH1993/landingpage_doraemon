@@ -1,6 +1,6 @@
 /* Doraemon Web v3 — typography */
 :root{
-  --font-sans:Arial,"Helvetica Neue",Helvetica,sans-serif;
+  --font-sans:"Times New Roman",Times,serif;
 }
 /* Force the entire web UI to Arial, including generated learning content. */
 html,body,* ,*::before,*::after{font-family:var(--font-sans) !important;}
@@ -95,7 +95,7 @@ button,input,textarea,select,label,
 .chat-role,.chat-text,.chat-choice,
 .button,.small-button,.danger-button,.icon-button,.send-button,
 .composer-hint,.loading,.toast {
-  font-family: Arial, sans-serif !important;
+  font-family:"Times New Roman",Times,serif !important;
 }
 
 .chat-typing{
@@ -104,7 +104,7 @@ button,input,textarea,select,label,
   gap:6px;
   min-height:24px;
   color:#2563eb;
-  font-family:Arial,sans-serif !important;
+  font-family:"Times New Roman",Times,serif !important;
   font-size:13px;
   font-weight:700;
 }

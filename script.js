@@ -201,7 +201,7 @@ function renderAppShell() {
   appView.innerHTML = `
     <div class="study-shell">
       <header class="study-topbar">
-        <a href="#/app" class="study-brand"><div class="logo-icon">D</div><div><strong>Doraemon</strong><span>Trợ lý học tiếng Nhật</span></div></a>
+        <a href="#/app" class="study-brand"><div class="logo-icon">D</div><div><strong>Doraemon</strong><span>Gia sư đồng hành cùng bạn</span></div></a>
         <div class="study-course-picker">
           <span>Đang học</span>
           <select id="courseSelect"><option value="">${courseName}</option>${state.courses.map(c => `<option value="${escapeHtml(c.course_id)}" ${String(c.course_id)===String(state.selectedCourseId)?"selected":""}>${escapeHtml(c.name)}</option>`).join("")}</select>
