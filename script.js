@@ -30,9 +30,17 @@ function nl2br(value) { return escapeHtml(value).replace(/\n/g, "<br>"); }
 // Rich text coming from Curriculum/Admin may contain only these harmless tags.
 // Never inject arbitrary HTML into the learner page.
 function decodeHtmlEntities(value) {
-  const ta = document.createElement("textarea");
-  ta.innerHTML = String(value ?? "");
-  return ta.value;
+  let out = String(value ?? "");
+  // Older drafts may have been escaped more than once. Decode only a couple
+  // of layers; never treat arbitrary user HTML as trusted without sanitizing.
+  for (let i = 0; i < 2; i++) {
+    const ta = document.createElement("textarea");
+    ta.innerHTML = out;
+    const next = ta.value;
+    if (next === out) break;
+    out = next;
+  }
+  return out;
 }
 
 function markdownToRichHtml(value) {
@@ -45,9 +53,9 @@ function markdownToRichHtml(value) {
 
 function sanitizeRichText(value) {
   if (value == null || value === "") return "";
-  // Decode one layer first so escaped tags such as &lt;b&gt;Test&lt;/b&gt;
-  // do not appear literally in the chat.
-  let src = decodeHtmlEntities(value);
+  // Decode legacy escaped tags before rendering. This also fixes old drafts
+  // persisted as &amp;lt;b&amp;gt; / &amp;lt;p&amp;gt;.
+  let src = decodeHtmlEntities(value).replace(/\r\n?/g, "\n");
   src = markdownToRichHtml(src);
   if (!/<\s*(?:b|strong|i|em|u|br|p|div|span)\b/i.test(src)) {
     return nl2br(src);
