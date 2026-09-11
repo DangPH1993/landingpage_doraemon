@@ -26,6 +26,38 @@ function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;","\"":"&quot;"}[c]));
 }
 function nl2br(value) { return escapeHtml(value).replace(/\n/g, "<br>"); }
+
+// Rich text coming from Curriculum/Admin may contain only these harmless tags.
+// Never inject arbitrary HTML into the learner page.
+function sanitizeRichText(value) {
+  const src = String(value ?? "");
+  if (!src) return "";
+  if (!/<\s*(?:b|strong|i|em|u|br|p|div|span)\b/i.test(src)) {
+    return nl2br(src);
+  }
+  const box = document.createElement("div");
+  box.innerHTML = src;
+  box.querySelectorAll("script,style,iframe,object,embed,link,meta,form,input,button,textarea,select,img,audio,video,svg,math").forEach(el => el.remove());
+  box.querySelectorAll("*").forEach(el => {
+    const tag = el.tagName.toLowerCase();
+    const allowed = new Set(["b","strong","i","em","u","br","p","div","span"]);
+    if (!allowed.has(tag)) {
+      el.replaceWith(...Array.from(el.childNodes));
+      return;
+    }
+    for (const attr of Array.from(el.attributes)) el.removeAttribute(attr.name);
+    if (tag === "strong") {
+      const b = document.createElement("b");
+      while (el.firstChild) b.appendChild(el.firstChild);
+      el.replaceWith(b);
+    } else if (tag === "em") {
+      const i = document.createElement("i");
+      while (el.firstChild) i.appendChild(el.firstChild);
+      el.replaceWith(i);
+    }
+  });
+  return box.innerHTML.replace(/\n{3,}/g, "\n\n");
+}
 function money(v) { return `${Number(v || 0).toLocaleString("vi-VN")} đ`; }
 function fmtDate(v) { if (!v) return "—"; const d = new Date(v); return Number.isNaN(d.getTime()) ? String(v).slice(0, 16) : d.toLocaleString("vi-VN"); }
 function setToken(token, profile = null) { state.token = token || ""; if (state.token) localStorage.setItem(TOKEN_KEY, state.token); else localStorage.removeItem(TOKEN_KEY); if (profile) { state.profile = profile; localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } }
@@ -212,7 +244,7 @@ function renderBlock(block) {
     return `<div class="choice-row">${options.map((o,i)=>`<button class="chat-choice ${i===0?"primary":""}" data-action="${escapeHtml(o.action || "")}" data-label="${escapeHtml(o.label || "")}" data-display="${escapeHtml(o.display_label || o.label || "")}">${escapeHtml(o.label || "Lựa chọn")}</button>`).join("")}</div>`;
   }
   if (type === "html") return block.html || "";
-  return `<div class="chat-text">${nl2br(block.text || "")}</div>`;
+  return `<div class="chat-text">${sanitizeRichText(block.text || "")}</div>`;
 }
 function renderMessages() {
   const list = $("#chatMessages"); if (!list) return;
