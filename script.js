@@ -29,9 +29,26 @@ function nl2br(value) { return escapeHtml(value).replace(/\n/g, "<br>"); }
 
 // Rich text coming from Curriculum/Admin may contain only these harmless tags.
 // Never inject arbitrary HTML into the learner page.
+function decodeHtmlEntities(value) {
+  const ta = document.createElement("textarea");
+  ta.innerHTML = String(value ?? "");
+  return ta.value;
+}
+
+function markdownToRichHtml(value) {
+  let src = String(value ?? "");
+  // The server may return markdown-style bold in older/generated messages.
+  src = src.replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>");
+  src = src.replace(/(^|[\s(])_([^_\n]+)_(?=$|[\s).,!?;:])/g, "$1<i>$2</i>");
+  return src;
+}
+
 function sanitizeRichText(value) {
-  const src = String(value ?? "");
-  if (!src) return "";
+  if (value == null || value === "") return "";
+  // Decode one layer first so escaped tags such as &lt;b&gt;Test&lt;/b&gt;
+  // do not appear literally in the chat.
+  let src = decodeHtmlEntities(value);
+  src = markdownToRichHtml(src);
   if (!/<\s*(?:b|strong|i|em|u|br|p|div|span)\b/i.test(src)) {
     return nl2br(src);
   }
