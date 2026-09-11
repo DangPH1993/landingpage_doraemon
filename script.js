@@ -402,7 +402,7 @@ async function renderCurriculum(el){
     api(`/learning/catalog${state.selectedCourseId ? `?course_id=${encodeURIComponent(state.selectedCourseId)}` : ""}`),
     api("/learning/summary")
   ]);
-  const docs=(catalog.documents||[]).filter(x=>String(x.content_type||"").trim().toLocaleLowerCase("vi-VN")==="giáo trình");
+  const docs=(catalog.documents||[]).filter(x=>String(x.content_type||"").trim() && String(x.lesson||"").trim());
   const progress=summary.learning_history||[];
   const statusRank={completed:3,done:3,in_progress:2,active:2,review:2,needs_review:2};
   const progressMap=new Map();
@@ -418,19 +418,38 @@ async function renderCurriculum(el){
     if(!row) return {label:"Chưa học",cls:"not-started",icon:"○"};
     const st=String(row.status||"").trim().toLocaleLowerCase("vi-VN");
     if(st==="completed"||st==="done") return {label:"Đã học",cls:"completed",icon:"✓"};
-    if(["in_progress","active","review","needs_review"].includes(st)) return {label:"Đang học dở",cls:"in-progress",icon:"↻"};
+    if(["in_progress","active","review","needs_review"].includes(st)) return {label:"Đang học",cls:"in-progress",icon:"↻"};
     return {label:"Chưa học",cls:"not-started",icon:"○"};
   };
-  const rows=uniqRows(docs);
+  const typeOrder=["Giáo trình","Bài tập","Từ vựng","Ngữ pháp","Truyện đọc"];
+  const types=[...typeOrder.filter(t=>docs.some(x=>String(x.content_type||"").trim()===t)),
+    ...[...new Set(docs.map(x=>String(x.content_type||"").trim()))].filter(t=>!typeOrder.includes(t))];
+  const grouped={};
+  for(const r of docs){const ct=String(r.content_type||"Nội dung").trim()||"Nội dung";(grouped[ct]??=[]).push(r);}
+
+  const uniquePerType = ct => uniqRows(grouped[ct]||[]);
+  const allRows = types.flatMap(ct=>uniquePerType(ct).map(r=>({...r,__type:ct})));
   const counts={"completed":0,"in-progress":0,"not-started":0};
-  const cards=rows.map(r=>{
-    const key=`${r.course_id!=null?String(r.course_id):""}|giáo trình|${String(r.lesson||"").trim().toLocaleLowerCase("vi-VN")}|${String(r.topic||"").trim().toLocaleLowerCase("vi-VN")}`;
-    const st=statusText(progressMap.get(key)); counts[st.cls]++;
-    return `<button class="curriculum-row" data-lesson="${escapeHtml(r.lesson||"")}" data-type="Giáo trình" data-topic="${escapeHtml(r.topic||"")}"><span class="curriculum-icon ${st.cls}">${st.icon}</span><span class="curriculum-main"><strong>${escapeHtml(r.lesson||"")}</strong>${r.topic?`<small>${escapeHtml(r.topic)}</small>`:""}</span><span class="curriculum-status ${st.cls}">${st.label}</span><span class="curriculum-open">Học →</span></button>`;
+  for(const r of allRows){
+    const key=`${r.course_id!=null?String(r.course_id):""}|${String(r.content_type||r.__type||"").trim().toLocaleLowerCase("vi-VN")}|${String(r.lesson||"").trim().toLocaleLowerCase("vi-VN")}|${String(r.topic||"").trim().toLocaleLowerCase("vi-VN")}`;
+    counts[statusText(progressMap.get(key)).cls]++;
+  }
+
+  const groupHtml=types.map(ct=>{
+    const rows=uniquePerType(ct);
+    if(!rows.length) return "";
+    const cards=rows.map(r=>{
+      const actualType=String(r.content_type||ct).trim();
+      const key=`${r.course_id!=null?String(r.course_id):""}|${actualType.toLocaleLowerCase("vi-VN")}|${String(r.lesson||"").trim().toLocaleLowerCase("vi-VN")}|${String(r.topic||"").trim().toLocaleLowerCase("vi-VN")}`;
+      const st=statusText(progressMap.get(key));
+      return `<button class="curriculum-row" data-lesson="${escapeHtml(r.lesson||"")}" data-type="${escapeHtml(actualType)}" data-topic="${escapeHtml(r.topic||"")}"><span class="curriculum-icon ${st.cls}">${st.icon}</span><span class="curriculum-main"><strong>${escapeHtml(r.lesson||"")}</strong>${r.topic?`<small>${escapeHtml(r.topic)}</small>`:""}</span><span class="curriculum-status ${st.cls}">${st.label}</span><span class="curriculum-open">Học →</span></button>`;
+    }).join("");
+    return `<div class="content-group curriculum-content-group"><div class="group-head"><span>${iconType(ct)} ${escapeHtml(ct)}</span><small>${rows.length} bài</small></div>${cards}</div>`;
   }).join("");
-  el.innerHTML=`<section class="page-card curriculum-card"><div class="card-head"><div><strong>📖 Giáo trình</strong><small>Xem trạng thái từng bài trong khóa học đang chọn</small></div><button class="small-button" id="curriculumRefresh">↻ Làm mới</button></div><div class="curriculum-summary"><div><strong>${rows.length}</strong><span>Tổng bài</span></div><div><strong>${counts["in-progress"]}</strong><span>Đang học</span></div><div><strong>${counts.completed}</strong><span>Đã học</span></div><div><strong>${counts["not-started"]}</strong><span>Chưa học</span></div></div><div class="curriculum-list">${cards||`<div class="empty-state">Chưa có bài Giáo trình được cấp quyền cho khóa học này.</div>`}</div></section>`;
+
+  el.innerHTML=`<section class="page-card curriculum-card"><div class="card-head"><div><strong>📖 Nội dung học</strong><small>Hiển thị tất cả loại nội dung của khóa học đang chọn</small></div><button class="small-button" id="curriculumRefresh">↻ Làm mới</button></div><div class="curriculum-summary"><div><strong>${allRows.length}</strong><span>Tổng bài</span></div><div><strong>${counts["in-progress"]}</strong><span>Đang học</span></div><div><strong>${counts.completed}</strong><span>Đã học</span></div><div><strong>${counts["not-started"]}</strong><span>Chưa học</span></div></div><div class="curriculum-list">${groupHtml||`<div class="empty-state">Chưa có nội dung nào được cấp quyền cho khóa học này.</div>`}</div></section>`;
   $("#curriculumRefresh").onclick=()=>renderCurriculum(el);
-  $$(".curriculum-row",el).forEach(btn=>btn.onclick=async()=>{closeLearnerPanel();await startLesson(btn.dataset.lesson,"Giáo trình",btn.dataset.topic||"");});
+  $$(".curriculum-row",el).forEach(btn=>btn.onclick=async()=>{closeLearnerPanel();await startLesson(btn.dataset.lesson,btn.dataset.type,btn.dataset.topic||"");});
 }
 
 async function renderPlan(el){const data=await api(`/learning/plan${state.selectedCourseId?`?course_id=${state.selectedCourseId}`:""}`); const plans=data.plans||[]; const plan=data.plan||null; const draft=data.draft||null; el.innerHTML=`<div class="page-grid"><section class="page-card"><div class="card-head"><div><strong>Lộ trình học</strong><small>${data.learning_mode==='planned'?'Đang học theo lộ trình':'Học tự do'}</small></div><button class="small-button" id="planChat">✦ Điều chỉnh bằng chat</button></div>${plans.length?plans.map(p=>`<div class="plan-card"><div class="plan-icon">🎯</div><div class="plan-main"><strong>${escapeHtml(p.goal_name||"Lộ trình")}</strong><span>${escapeHtml(p.content_type||"")} · ${escapeHtml(p.scope||"")}</span><small>Bắt đầu: ${escapeHtml(p.start_date||"—")} ${p.target_date?` · Mục tiêu: ${escapeHtml(p.target_date)}`:""}</small></div><button class="danger-button" data-delete-plan="${p.id}">Xóa</button></div>`).join(""): `<div class="empty-state">${draft?"Bạn có một lộ trình nháp. Hãy vào chat để xác nhận lộ trình.":"Chưa có lộ trình hoạt động. Hãy mở chat và chọn <b>Học theo lộ trình</b>."}</div>`}</section><aside class="page-card"><h3>📊 Trạng thái</h3><div class="stat-grid"><div><strong>${plans.length}</strong><span>Plan active</span></div><div><strong>${escapeHtml(data.learning_mode||"free")}</strong><span>Chế độ</span></div></div>${plan?`<div class="mini-note">${escapeHtml(plan.goal_name||"")}</div>`:""}</aside></div>`; $("#planChat").onclick=async()=>{state.view="chat"; closeLearnerPanel(); await renderChat($("#appContent"));}; $$("[data-delete-plan]").forEach(b=>b.onclick=async()=>{if(!confirm("Xóa lộ trình này?"))return;try{await api(`/learning/plan/${b.dataset.deletePlan}`,{method:"DELETE"});toast("Đã xóa lộ trình","success");await renderPlan($("#appContent"));}catch(e){toast(e.message,"error");}});}
