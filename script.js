@@ -13,6 +13,8 @@ const state = {
   chatHistory: [],
   messages: [],
   courses: [],
+  activeContentType: "",
+  activeLesson: "",
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -281,6 +283,9 @@ function addChatMessage(role, blocks, opts = {}) {
 function textBlocksFromReply(reply) { return [{type:"text",text:String(reply || "")}]; }
 function renderBlock(block) {
   const type = block?.type || "text";
+  if (type === "typing") {
+    return `<div class="chat-typing" aria-live="polite"><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span><span class="chat-typing-label">${escapeHtml(block.text || "Doraemon đang suy nghĩ...")}</span></div>`;
+  }
   if (type === "image") {
     const url = block.url || block.image_url || ""; if (!url) return "";
     const meta = [block.term, block.reading, block.meaning].filter(Boolean).join(" · ");
@@ -306,7 +311,8 @@ async function sendChat(prompt, imageBase64 = null, proactive = false, action = 
   if (!state.token) { openAuth("login"); return; }
   const userLabel = visibleUserText ?? prompt;
   if (userLabel) { addChatMessage("user", textBlocksFromReply(userLabel)); renderMessages(); }
-  const bubble = addChatMessage("model", [{type:"text", text:"💭 Doraemon đang suy nghĩ..."}]); renderMessages();
+  const isExerciseGrading = !action && String(state.activeContentType || "").trim() === "Bài tập" && String(prompt || "").trim();
+  const bubble = addChatMessage("model", [{type:"typing", text:isExerciseGrading ? "Doraemon đang chấm điểm..." : "Doraemon đang suy nghĩ..."}]); renderMessages();
   try {
     const payload = {
       prompt: prompt || "",
@@ -359,7 +365,7 @@ async function renderChat(el) {
     $(".study-library").innerHTML = `<div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div></div><div class="empty-state error">${escapeHtml(e.message)}</div>`;
   }
   renderMessages();
-  $("#newChatBtn").onclick = () => { state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`; state.chatboxNew=true; state.messages=[]; state.chatHistory=[]; startWelcome(); };
+  $("#newChatBtn").onclick = () => { state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`; state.chatboxNew=true; state.messages=[]; state.chatHistory=[]; state.activeContentType=""; state.activeLesson=""; startWelcome(); };
   const input=$("#chatInput"); const send=()=>{const v=input.value.trim(); if(!v)return; input.value=""; autoGrow(input); sendChat(v);}; $("#sendBtn").onclick=send; input.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();} }); input.addEventListener("input",()=>autoGrow(input));
   $$(".lesson-card", el).forEach(x=>x.onclick=()=>startLesson(x.dataset.lesson,x.dataset.type,x.dataset.topic||""));
   if (!state.messages.length) await startWelcome();
@@ -377,6 +383,8 @@ function iconType(t){return ({"Giáo trình":"📖","Từ vựng":"🧠","Ngữ 
 function encodeLessonScope(scope){const raw=JSON.stringify(scope);const bytes=encodeURIComponent(raw).replace(/%([0-9A-F]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)));return btoa(bytes).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");}
 async function startLesson(lesson,type,topic=""){
   state.view="chat";
+  state.activeContentType = String(type || "Giáo trình").trim();
+  state.activeLesson = String(lesson || "").trim();
   state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;
   state.chatboxNew=true;
   state.messages=[];

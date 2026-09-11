@@ -59,3 +59,56 @@ body{font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothin
 .chat-row.model .chat-avatar-doraemon{background:#fff;border-color:#bfdbfe;box-shadow:0 5px 14px rgba(37,99,235,.12)}
 .chat-avatar-doraemon img{width:32px;height:32px;object-fit:contain;display:block}
 .chat-row.model .chat-avatar-doraemon{overflow:hidden}
+
+/* v14: enforce Arial on every visible UI label and add grading status animation. */
+html,body,body *,body *::before,body *::after,
+button,input,textarea,select,label,
+.navbar,.navbar *,
+.app-view,.app-view *,
+.app-sidebar,.app-sidebar *,
+.app-topbar,.app-topbar *,
+.app-brand,.app-brand *,
+.user-mini,.user-mini *,
+.side-nav,.side-nav *,
+.side-nav-item,.side-nav-item *,
+.study-library,.study-library *,
+.study-library-head,.study-library-head *,
+.lesson-section,.lesson-section *,
+.lesson-section-head,.lesson-section-head *,
+.content-group,.content-group *,
+.group-head,.group-head *,
+.lesson-card,.lesson-card *,
+.section-label,.content-count,
+.chat-panel,.chat-panel *,
+.chat-toolbar,.chat-toolbar *,
+.chat-role,.chat-text,.chat-choice,
+.button,.small-button,.danger-button,.icon-button,.send-button,
+.composer-hint,.loading,.toast {
+  font-family: Arial, sans-serif !important;
+}
+
+.chat-typing{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  min-height:24px;
+  color:#2563eb;
+  font-family:Arial,sans-serif !important;
+  font-size:13px;
+  font-weight:700;
+}
+.chat-typing-dot{
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:#2563eb;
+  display:inline-block;
+  animation:doraemonTyping 1.15s infinite ease-in-out;
+}
+.chat-typing-dot:nth-child(2){animation-delay:.16s}
+.chat-typing-dot:nth-child(3){animation-delay:.32s}
+.chat-typing-label{margin-left:3px}
+@keyframes doraemonTyping{
+  0%,60%,100%{transform:translateY(0);opacity:.38}
+  30%{transform:translateY(-4px);opacity:1}
+}
