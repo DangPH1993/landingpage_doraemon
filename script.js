@@ -311,8 +311,8 @@ async function sendChat(prompt, imageBase64 = null, proactive = false, action = 
   if (!state.token) { openAuth("login"); return; }
   const userLabel = visibleUserText ?? prompt;
   if (userLabel) { addChatMessage("user", textBlocksFromReply(userLabel)); renderMessages(); }
-  const isExerciseGrading = !action && ["Bài tập","Luyện viết"].includes(String(state.activeContentType || "").trim()) && String(prompt || "").trim();
-  const bubble = addChatMessage("model", [{type:"typing", text:isExerciseGrading ? "Doraemon đang chấm bài..." : "Doraemon đang suy nghĩ..."}]); renderMessages();
+  const isExerciseGrading = !action && String(state.activeContentType || "").trim() === "Bài tập" && String(prompt || "").trim();
+  const bubble = addChatMessage("model", [{type:"typing", text:isExerciseGrading ? "Doraemon đang chấm điểm..." : "Doraemon đang suy nghĩ..."}]); renderMessages();
   try {
     const payload = {
       prompt: prompt || "",
@@ -342,6 +342,20 @@ async function sendChat(prompt, imageBase64 = null, proactive = false, action = 
 async function startWelcome() {
   state.messages = []; state.chatHistory = [];
   try {
+    try {
+      const c = await api(`/learning/collocation/daily${state.selectedCourseId ? `?course_id=${encodeURIComponent(state.selectedCourseId)}` : ""}`);
+      if (c?.show && c.collocation) {
+        const x=c.collocation;
+        const blocks=[
+          {type:"text",text:"💡 **Collocation hôm nay**"},
+          {type:"text",text:`**${x.collocation||""}**\n\n**Nghĩa:** ${x.meaning||""}\n\n**Ví dụ:** ${x.example||""}`}
+        ];
+        if(x.image_url) blocks.push({type:"image",key:`collocation-${x.id}`,url:x.image_url,caption:"Ảnh minh họa cho ví dụ"});
+        blocks.push({type:"text",text:"🌟 Ghi nhớ mẫu này nhé! Bây giờ mình bắt đầu học nào. 😊"});
+        state.messages.push({role:"model",blocks});
+        rememberChatTurn("model",blocks.map(b=>b.type==='text'?b.text:'').filter(Boolean).join("\n\n"));
+      }
+    } catch (ce) { console.warn('Daily collocation skipped:', ce); }
     const data = await api(`/session/welcome${state.selectedCourseId ? `?course_id=${encodeURIComponent(state.selectedCourseId)}` : ""}`);
     if (data.message) rememberChatTurn("model", data.message);
     state.messages.push({role:"model",blocks:data.content_blocks?.length ? data.content_blocks : textBlocksFromReply(data.message)});
@@ -380,7 +394,7 @@ async function renderChat(el) {
       if(["in_progress","active","review","needs_review"].includes(st)) return {label:"Đang học dở ↻",cls:"in-progress"};
       return {label:"Chưa học",cls:"not-started"};
     };
-    const types=["Giáo trình","Bài tập","Luyện viết","Từ vựng","Ngữ pháp","Truyện đọc",...Object.keys(grouped).filter(x=>!["Giáo trình","Bài tập","Luyện viết","Từ vựng","Ngữ pháp","Truyện đọc"].includes(x))];
+    const types=["Giáo trình","Từ vựng","Ngữ pháp","Bài tập","Truyện đọc",...Object.keys(grouped).filter(x=>!["Giáo trình","Từ vựng","Ngữ pháp","Bài tập","Truyện đọc"].includes(x))];
     const sections=types.filter(t=>grouped[t]?.length).map(t=>`<div class="lesson-section"><div class="lesson-section-head"><span>${iconType(t)} ${escapeHtml(t)}</span><small>${new Set(grouped[t].map(x=>`${x.lesson}|${x.topic||""}`)).size} bài</small></div>${uniqRows(grouped[t]).slice(0,14).map(r=>{
       const actualType=String(r.content_type||t).trim();
       const key=`${r.course_id!=null?String(r.course_id):""}|${actualType.toLocaleLowerCase("vi-VN")}|${String(r.lesson||"").trim().toLocaleLowerCase("vi-VN")}|${String(r.topic||"").trim().toLocaleLowerCase("vi-VN")}`;
@@ -401,12 +415,12 @@ function autoGrow(el){el.style.height="auto";el.style.height=Math.min(160,el.scr
 async function renderCatalog(el){
   const data=await api(`/learning/catalog${state.selectedCourseId ? `?course_id=${encodeURIComponent(state.selectedCourseId)}` : ""}`);
   const docs=data.documents||[]; const grouped={}; docs.forEach(r=>{const ct=r.content_type||"Nội dung"; const lesson=r.lesson||""; if(!lesson)return;(grouped[ct]??=[]).push(r);});
-  const types=["Giáo trình","Bài tập","Luyện viết","Từ vựng","Ngữ pháp","Truyện đọc",...Object.keys(grouped).filter(x=>!["Giáo trình","Bài tập","Luyện viết","Từ vựng","Ngữ pháp","Truyện đọc"].includes(x))];
+  const types=["Giáo trình","Từ vựng","Ngữ pháp","Bài tập","Truyện đọc",...Object.keys(grouped).filter(x=>!["Giáo trình","Từ vựng","Ngữ pháp","Bài tập","Truyện đọc"].includes(x))];
   el.innerHTML=`<div class="page-grid"><section><div class="page-card"><div class="card-head"><div><strong>Nội dung được cấp quyền</strong><small>${docs.length?`${docs.length} bản ghi nội dung`:"Chưa có nội dung"}</small></div><button class="small-button" id="catalogRefresh">↻ Làm mới</button></div>${docs.length?types.filter(t=>grouped[t]?.length).map(t=>`<div class="content-group"><div class="group-head"><span>${iconType(t)} ${escapeHtml(t)}</span><small>${new Set(grouped[t].map(x=>`${x.lesson}|${x.topic||""}`)).size} bài</small></div>${uniqRows(grouped[t]).map(r=>`<button class="lesson-card" data-lesson="${escapeHtml(r.lesson)}" data-type="${escapeHtml(r.content_type)}"><div><strong>${escapeHtml(r.lesson)}</strong><small>${escapeHtml(r.topic||"")}</small></div><span>Học →</span></button>`).join("")}</div>`).join(""): `<div class="empty-state">${data.requires_course_selection?"Hãy chọn khóa học ở góc phải.":"Tài khoản chưa có nội dung khóa học được cấp quyền."}</div>`}</div></section><aside class="page-card insight"><h3>📌 Cách học</h3><p>Chọn một bài cụ thể để Doraemon mở đúng lesson trong chat. Server sẽ quản lý trạng thái tiến độ và bước giáo trình.</p><div class="stat-grid"><div><strong>${docs.length}</strong><span>Bản ghi</span></div><div><strong>${Object.keys(grouped).length}</strong><span>Loại nội dung</span></div></div></aside></div>`;
   $("#catalogRefresh").onclick=()=>renderCatalog($("#appContent")); $$(".lesson-card").forEach(b=>b.onclick=()=>startLesson(b.dataset.lesson,b.dataset.type,b.dataset.topic||""));
 }
 function uniqRows(rows){const seen=new Set();return rows.filter(r=>{const k=`${r.lesson}|${r.topic||""}`;if(seen.has(k))return false;seen.add(k);return true;}).sort((a,b)=>String(a.lesson).localeCompare(String(b.lesson),"vi"));}
-function iconType(t){return ({"Giáo trình":"📖","Từ vựng":"🧠","Ngữ pháp":"✏️","Bài tập":"📝","Luyện viết":"✍️","Truyện đọc":"📚"})[t]||"📄";}
+function iconType(t){return ({"Giáo trình":"📖","Từ vựng":"🧠","Ngữ pháp":"✏️","Bài tập":"📝","Luyện viết":"✍️","Truyện đọc":"📚","Collocation":"💡"})[t]||"📄";}
 function encodeLessonScope(scope){const raw=JSON.stringify(scope);const bytes=encodeURIComponent(raw).replace(/%([0-9A-F]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)));return btoa(bytes).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");}
 async function startLesson(lesson,type,topic=""){
   state.view="chat";
@@ -448,7 +462,7 @@ async function renderCurriculum(el){
     if(["in_progress","active","review","needs_review"].includes(st)) return {label:"Đang học",cls:"in-progress",icon:"↻"};
     return {label:"Chưa học",cls:"not-started",icon:"○"};
   };
-  const typeOrder=["Giáo trình","Bài tập","Luyện viết","Từ vựng","Ngữ pháp","Truyện đọc"];
+  const typeOrder=["Giáo trình","Bài tập","Từ vựng","Ngữ pháp","Truyện đọc"];
   const types=[...typeOrder.filter(t=>docs.some(x=>String(x.content_type||"").trim()===t)),
     ...[...new Set(docs.map(x=>String(x.content_type||"").trim()))].filter(t=>!typeOrder.includes(t))];
   const grouped={};
