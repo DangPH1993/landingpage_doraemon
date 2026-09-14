@@ -1,0 +1,135 @@
+<!-- doraemon landing web v12-richtext-newline-force -->
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Doraemon — người bạn AI đồng hành cùng bạn chinh phục các khóa học trực tiếp trên web.">
+    <meta name="theme-color" content="#eef6ff">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<title>Doraemon — Gia sư đồng hành cùng bạn</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="navbar" id="siteNav">
+    <div class="container navbar-inner">
+        <a href="#" class="logo" data-route="landing"><div class="logo-icon">D</div><span>Doraemon</span></a>
+        <nav class="nav-links">
+            <a href="#features">Tính năng</a>
+            <a href="#how-it-works">Cách hoạt động</a>
+            <a href="#about">Về Doraemon</a>
+        </nav>
+        <div class="nav-actions">
+            <button class="button button-secondary nav-login" id="navAuthBtn">Đăng nhập</button>
+            <a href="#/app" class="button button-primary nav-app">Học trên Web →</a>
+        </div>
+    </div>
+</header>
+
+<main id="landingView">
+    <section class="hero">
+        <div class="container hero-grid">
+            <div class="hero-content">
+                <div class="eyebrow">✨ Gia sư AI đồng hành cùng bạn</div>
+                <h1>Học cùng <span>Doraemon</span></h1>
+                <p class="hero-description">Từ vựng, ngữ pháp, giáo trình, bài tập, truyện đọc và ôn tập đều có thể học trực tiếp trên trình duyệt.</p>
+                <div class="hero-actions">
+                    <a href="#/app" class="button button-primary">Học ngay trên Web <span>→</span></a>
+                    <button class="button button-secondary" id="heroAuthBtn">Đăng nhập / Đăng ký</button>
+                </div>
+                <div class="hero-note"><span>✓</span> Không cần cài đặt · Học mọi nơi · Dùng chung dữ liệu với Doraemon App</div>
+            </div>
+
+            <div class="hero-visual">
+                <div class="glow"></div>
+                <div class="doraemon-card">
+                    <div class="doraemon-face">
+                        <div class="eye eye-left"><div class="eye-pupil"></div></div>
+                        <div class="eye eye-right"><div class="eye-pupil"></div></div>
+                        <div class="nose"></div>
+                        <div class="mouth"></div>
+                        <div class="whiskers whisker-left"><span></span><span></span><span></span></div>
+                        <div class="whiskers whisker-right"><span></span><span></span><span></span></div>
+                    </div>
+                    <div class="doraemon-bell"></div>
+                </div>
+                <div class="floating-card floating-card-top"><span class="floating-icon">📚</span><div><strong>Học trực tiếp trên Web</strong><small>Không cần cài app</small></div></div>
+                <div class="floating-card floating-card-bottom"><span class="floating-icon">✨</span><div><strong>AI + Knowledge Base</strong><small>Học theo dữ liệu khóa học</small></div></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="features section" id="features">
+        <div class="container">
+            <div class="section-heading">
+                <div class="section-label">DORAEMON CÓ THỂ GIÚP BẠN</div>
+                <h2>Một nơi cho <span>toàn bộ việc học</span></h2>
+                <p>Web dùng cùng backend với Doraemon App nên tiến độ, khóa học và phiên học được đồng bộ.</p>
+            </div>
+            <div class="feature-grid">
+                <article class="feature-card"><div class="feature-icon purple">💬</div><h3>Chat Doraemon</h3><p>Hỏi đáp tự nhiên, theo ngữ cảnh bài đang học; các nút Tiếp theo / xác nhận của giáo trình hoạt động ngay trong chat.</p><a href="#/app">Mở phòng học →</a></article>
+                <article class="feature-card"><div class="feature-icon blue">🧠</div><h3>Từ vựng & Ngữ pháp</h3><p>Tra cách viết, cách đọc, nghĩa, ví dụ và học theo dữ liệu đã có trong khóa học.</p><a href="#/app?view=catalog">Xem nội dung →</a></article>
+                <article class="feature-card"><div class="feature-icon orange">✏️</div><h3>Bài tập & Review</h3><p>Làm bài, trả lời câu hỏi, xem phản hồi và ôn lại phần sai theo lịch của Doraemon.</p><a href="#/app?view=review">Mở ôn tập →</a></article>
+                <article class="feature-card"><div class="feature-icon green">📖</div><h3>Giáo trình & Truyện đọc</h3><p>Đọc nội dung, xem hình ảnh được lưu trong Knowledge Base và hỏi Doraemon ngay bên cạnh.</p><a href="#/app?view=catalog">Khám phá →</a></article>
+                <article class="feature-card"><div class="feature-icon pink">🎯</div><h3>Lộ trình học</h3><p>Thiết lập mục tiêu bằng chat, xem các plan đang hoạt động và xóa plan không còn phù hợp.</p><a href="#/app?view=plan">Xem lộ trình →</a></article>
+                <article class="feature-card"><div class="feature-icon cyan">💳</div><h3>Khóa học & Gói học</h3><p>Xem khóa được cấp quyền, gói đang dùng và thông tin thanh toán do Admin cấu hình.</p><a href="#/app?view=packages">Xem gói →</a></article>
+            </div>
+        </div>
+    </section>
+
+    <section class="about section" id="about">
+        <div class="container about-grid">
+            <div class="about-visual"><div class="about-circle"><div class="about-doraemon">D</div></div><div class="about-badge">🤖 AI Learning Assistant</div></div>
+            <div class="about-content">
+                <div class="section-label">KHÔNG CHỈ LÀ CHATBOT</div>
+                <h2>Doraemon là <span>người bạn học tập</span> của bạn</h2>
+                <p>Website này kết nối thẳng với hệ thống Doraemon hiện tại. Bạn có thể bắt đầu trên Web rồi tiếp tục trên App mà không phải học lại từ đầu.</p>
+                <div class="check-list">
+                    <div class="check-item"><span>✓</span><p>Chung tài khoản, khóa học và tiến độ</p></div>
+                    <div class="check-item"><span>✓</span><p>Chung logic AI, RAG, curriculum và review</p></div>
+                    <div class="check-item"><span>✓</span><p>Hỗ trợ hình ảnh và rich content trong chat</p></div>
+                    <div class="check-item"><span>✓</span><p>Có kênh Chat Admin để hỗ trợ tài khoản</p></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="how-it-works section" id="how-it-works">
+        <div class="container">
+            <div class="section-heading"><div class="section-label">CÁCH HOẠT ĐỘNG</div><h2>Ba bước để <span>bắt đầu học</span></h2><p>Đăng nhập, chọn khóa học và để Doraemon đồng hành trong từng phiên học.</p></div>
+            <div class="steps">
+                <div class="step"><div class="step-number">01</div><div class="step-icon">👤</div><h3>Đăng nhập</h3><p>Tạo tài khoản hoặc đăng nhập tài khoản Doraemon hiện có.</p></div><div class="step-line"></div>
+                <div class="step"><div class="step-number">02</div><div class="step-icon">📚</div><h3>Chọn khóa học</h3><p>Chọn khóa đã được cấp quyền và bắt đầu từ giáo trình, từ vựng, ngữ pháp hoặc bài tập.</p></div><div class="step-line"></div>
+                <div class="step"><div class="step-number">03</div><div class="step-icon">🎯</div><h3>Học & ôn tập</h3><p>Chat, làm bài, theo dõi tiến độ và quay lại review khi Doraemon nhắc.</p></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="cta section" id="download">
+        <div class="container"><div class="cta-box"><div class="cta-decoration decoration-one"></div><div class="cta-decoration decoration-two"></div><div class="cta-content"><div class="cta-icon">✨</div><h2>Sẵn sàng học cùng Doraemon?</h2><p>Học trực tiếp trên Web hoặc tiếp tục sử dụng Doraemon App cho Windows.</p><div class="cta-actions"><a href="#/app" class="button button-white">Học trên Web →</a><a href="https://github.com/DangPH1993/landingpage_doraemon/releases/download/v1.0.0/app.exe" class="button button-ghost-white" download>↓ Tải App Windows</a></div></div></div></div>
+    </section>
+</main>
+
+<div id="appView" class="app-view hidden"></div>
+
+<div id="authModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-card auth-card">
+        <button class="modal-close" data-close-modal>×</button>
+        <div class="auth-brand"><div class="logo-icon">D</div><div><strong>Doraemon</strong><span>Gia sư đồng hành cùng bạn</span></div></div>
+        <div class="auth-tabs"><button class="auth-tab active" data-auth-mode="login">Đăng nhập</button><button class="auth-tab" data-auth-mode="register">Đăng ký</button></div>
+        <form id="authForm" class="auth-form">
+            <label>Số điện thoại<input id="authPhone" name="phone" autocomplete="username" required></label>
+            <label id="nicknameField">Nickname<input id="authNickname" name="nickname" autocomplete="nickname"></label>
+            <label>Mật khẩu<input id="authPassword" type="password" name="password" autocomplete="current-password" required minlength="6"></label>
+            <button class="button button-primary full" type="submit" id="authSubmit">Đăng nhập</button>
+            <div id="authStatus" class="form-status"></div>
+        </form>
+    </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
