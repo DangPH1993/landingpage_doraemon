@@ -123,3 +123,14 @@ button,input,textarea,select,label,
   0%,60%,100%{transform:translateY(0);opacity:.38}
   30%{transform:translateY(-4px);opacity:1}
 }
+
+/* v23: Collocation image = 2/3 bubble width and centered */
+.daily-collocation-image{
+  width:66.6667%!important;
+  min-width:0!important;
+  max-width:none!important;
+  height:auto!important;
+  margin:12px auto!important;
+  display:block!important;
+  object-fit:contain!important;
+}
