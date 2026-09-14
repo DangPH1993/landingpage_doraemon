@@ -134,3 +134,6 @@ button,input,textarea,select,label,
   display:block!important;
   object-fit:contain!important;
 }
+
+.chat-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+#freeTutorBtn{border:1px solid rgba(76,111,255,.28);background:linear-gradient(135deg,#eef4ff,#f7f2ff)}

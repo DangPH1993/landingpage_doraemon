@@ -16,6 +16,7 @@ const state = {
   courses: [],
   activeContentType: "",
   activeLesson: "",
+  freeChatTutor: false,
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -344,6 +345,7 @@ async function sendChat(prompt, imageBase64 = null, proactive = false, action = 
       action,
       selected_context: null,
       course_id: state.selectedCourseId ? Number(state.selectedCourseId) : null,
+      free_chat_tutor: Boolean(state.freeChatTutor),
     };
     state.chatboxNew = false;
     const data = await api("/api/proxy-chat", {method:"POST", body:payload});
@@ -398,7 +400,7 @@ async function startWelcome() {
 async function renderChat(el) {
   el.innerHTML = `<div class="study-grid">
     <aside class="study-library page-card"><div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">Đang học</span></div><div class="loading">Đang tải nội dung…</div><div class="library-note">💡 Chọn bài để Doraemon mở đúng ngữ cảnh học. Trạng thái chi tiết của Giáo trình nằm trong menu <b>Thông tin người học → Giáo trình</b>.</div></aside>
-    <section class="chat-panel page-card"><div class="chat-toolbar"><div class="chat-toolbar-copy"><span class="section-label">PHIÊN HỌC</span><strong>Học cùng Doraemon</strong><small>Doraemon hướng dẫn, giải thích, đặt câu hỏi và phản hồi ngay trong cùng một phòng học.</small></div><button class="small-button" id="newChatBtn">＋ Phiên mới</button></div><div class="chat-messages" id="chatMessages"></div><div class="chat-composer"><textarea id="chatInput" rows="1" placeholder="Hỏi Doraemon hoặc trả lời câu hỏi…"></textarea><button class="send-button" id="sendBtn" aria-label="Gửi tin nhắn">➤</button></div><div class="composer-hint">Enter để gửi · Shift+Enter để xuống dòng · Có thể dán ảnh bài tập vào ô chat</div></section>
+    <section class="chat-panel page-card"><div class="chat-toolbar"><div class="chat-toolbar-copy"><span class="section-label">PHIÊN HỌC</span><strong>Học cùng Doraemon</strong><small>Doraemon hướng dẫn, giải thích, đặt câu hỏi và phản hồi ngay trong cùng một phòng học.</small></div><div class="chat-toolbar-actions"><button class="small-button" id="freeTutorBtn">💬 Free Chat Tutor</button><button class="small-button" id="newChatBtn">＋ Phiên mới</button></div></div><div class="chat-messages" id="chatMessages"></div><div class="chat-composer"><textarea id="chatInput" rows="1" placeholder="Hỏi Doraemon hoặc trả lời câu hỏi…"></textarea><button class="send-button" id="sendBtn" aria-label="Gửi tin nhắn">➤</button></div><div class="composer-hint">Enter để gửi · Shift+Enter để xuống dòng · Có thể dán ảnh bài tập vào ô chat</div></section>
   </div>`;
   try {
     const [catalog, summary] = await Promise.all([
@@ -438,7 +440,14 @@ async function renderChat(el) {
     $(".study-library").innerHTML = `<div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div></div><div class="empty-state error">${escapeHtml(e.message)}</div>`;
   }
   renderMessages();
-  $("#newChatBtn").onclick = () => { state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`; state.chatboxNew=true; state.messages=[]; state.chatHistory=[]; state.activeContentType=""; state.activeLesson=""; startWelcome(); };
+  $("#newChatBtn").onclick = () => { state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`; state.chatboxNew=true; state.messages=[]; state.chatHistory=[]; state.activeContentType=""; state.activeLesson=""; state.freeChatTutor=false; startWelcome(); };
+  $("#freeTutorBtn").onclick = async () => {
+    state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;
+    state.chatboxNew=true; state.messages=[]; state.chatHistory=[];
+    state.activeContentType=""; state.activeLesson=""; state.freeChatTutor=true;
+    renderMessages();
+    await sendChat("Bắt đầu một phiên Free Chat Tutor. Hãy chủ động bắt chuyện với mình.", null, false, null, null);
+  };
   const input=$("#chatInput"); const send=()=>{const v=input.value.trim(); if(!v)return; input.value=""; autoGrow(input); sendChat(v);}; $("#sendBtn").onclick=send; input.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();} }); input.addEventListener("input",()=>autoGrow(input));
   $$(".lesson-card", el).forEach(x=>x.onclick=()=>startLesson(x.dataset.lesson,x.dataset.type,x.dataset.topic||""));
   if (!state.messages.length) await startWelcome();
@@ -458,6 +467,7 @@ async function startLesson(lesson,type,topic=""){
   state.view="chat";
   state.activeContentType = String(type || "Giáo trình").trim();
   state.activeLesson = String(lesson || "").trim();
+  state.freeChatTutor = false;
   state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;
   state.chatboxNew=true;
   state.messages=[];
