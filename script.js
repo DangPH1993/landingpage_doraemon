@@ -10,6 +10,7 @@ const state = {
   selectedCourseName: "",
   chatboxId: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
   chatboxNew: true,
+  showCollocationOnFirstChat: false,
   chatHistory: [],
   messages: [],
   courses: [],
@@ -164,6 +165,8 @@ async function loadMe() {
 async function login(phone, password) {
   const data = await api("/auth/login", { method: "POST", body: { phone, password } });
   setToken(data.access_token, data.user);
+  sessionStorage.removeItem("doraemon_collocation_shown_this_login");
+  state.showCollocationOnFirstChat = true;
   await loadMe();
   closeAuth();
   toast("Đăng nhập thành công", "success");
@@ -172,11 +175,13 @@ async function login(phone, password) {
 async function register(phone, nickname, password) {
   const data = await api("/auth/register", { method: "POST", body: { phone, nickname, password } });
   setToken(data.access_token || "", data.user || { phone, nickname });
+  sessionStorage.removeItem("doraemon_collocation_shown_this_login");
+  state.showCollocationOnFirstChat = true;
   if (!state.token) { await login(phone, password); return; }
   await loadMe(); closeAuth(); toast("Tạo tài khoản thành công", "success"); location.hash = "#/app";
 }
 function logout(showToast = true) {
-  state.token = ""; state.profile = null; state.courses = []; state.chatHistory = []; state.messages = []; state.chatboxNew = true;
+  state.token = ""; state.profile = null; state.courses = []; state.chatHistory = []; state.messages = []; state.chatboxNew = true; state.showCollocationOnFirstChat = false; sessionStorage.removeItem("doraemon_collocation_shown_this_login");
   localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(PROFILE_KEY);
   if (showToast) toast("Đã đăng xuất", "success");
   location.hash = "#";
@@ -291,6 +296,18 @@ function renderBlock(block) {
     const meta = [block.term, block.reading, block.meaning].filter(Boolean).join(" · ");
     return `<figure class="chat-image"><img src="${escapeHtml(url)}" alt="${escapeHtml(meta || "Nội dung bài học")}" loading="lazy" onerror="this.closest('figure').classList.add('image-error')"><figcaption>${escapeHtml(meta || block.caption || "")}</figcaption></figure>`;
   }
+  if (type === "collocation") {
+    const x=block.collocation||{};
+    const image=x.image_url||"";
+    return `<div class="daily-collocation-card">
+      <div class="daily-collocation-title">💡 Collocation hôm nay</div>
+      <div class="daily-collocation-term">${escapeHtml(x.collocation||"")}</div>
+      <div class="daily-collocation-field"><strong>Nghĩa:</strong> ${escapeHtml(x.meaning||"")}</div>
+      <div class="daily-collocation-field"><strong>Ví dụ:</strong> ${escapeHtml(x.example||"")}</div>
+      ${image?`<img class="daily-collocation-image" src="${escapeHtml(image)}" alt="Ảnh minh họa cho ví dụ" loading="eager" onerror="this.classList.add('image-error')">`:""}
+      <div class="daily-collocation-footer"><span>🌟 Ghi nhớ mẫu này nhé! Bây giờ mình bắt đầu học nào. 😊</span><button type="button" class="collocation-shuffle" data-message-index="${Number(block.messageIndex ?? -1)}" data-collocation-id="${Number(x.id||0)}" title="Xem Collocation khác">🔀</button></div>
+    </div>`;
+  }
   if (type === "choice") {
     const options = Array.isArray(block.options) ? block.options : [];
     return `<div class="choice-row">${options.map((o,i)=>`<button class="chat-choice ${i===0?"primary":""}" data-action="${escapeHtml(o.action || "")}" data-label="${escapeHtml(o.label || "")}" data-display="${escapeHtml(o.display_label || o.label || "")}">${escapeHtml(o.label || "Lựa chọn")}</button>`).join("")}</div>`;
@@ -300,8 +317,9 @@ function renderBlock(block) {
 }
 function renderMessages() {
   const list = $("#chatMessages"); if (!list) return;
-  list.innerHTML = state.messages.map((m, idx)=>`<div class="chat-row ${m.role==='user'?'user':'model'}"><div class="chat-avatar ${m.role==='model'?'chat-avatar-doraemon':''}">${m.role==='user'?'Bạn':'<img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy">'}</div><div class="chat-bubble"><div class="chat-role">${m.role==='user'?'Bạn':'Doraemon'}</div>${m.blocks.map(renderBlock).join("")}</div></div>`).join("");
+  list.innerHTML = state.messages.map((m, idx)=>`<div class="chat-row ${m.role==='user'?'user':'model'}"><div class="chat-avatar ${m.role==='model'?'chat-avatar-doraemon':''}">${m.role==='user'?'Bạn':'<img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy">'}</div><div class="chat-bubble"><div class="chat-role">${m.role==='user'?'Bạn':'Doraemon'}</div>${m.blocks.map(b=>renderBlock({...b,messageIndex:idx})).join("")}</div></div>`).join("");
   $$(".chat-choice", list).forEach(btn => btn.addEventListener("click", () => sendAction(btn.dataset.action, btn.dataset.display || btn.dataset.label)));
+  $$(".collocation-shuffle", list).forEach(btn => btn.addEventListener("click", () => shuffleCollocation(Number(btn.dataset.messageIndex), Number(btn.dataset.collocationId))));
   list.scrollTop = list.scrollHeight;
 }
 function currentHistoryForApi() { return state.chatHistory.slice(-20); }
@@ -339,23 +357,37 @@ async function sendChat(prompt, imageBase64 = null, proactive = false, action = 
     bubble.blocks = [{type:"text",text:`${e.message}` }]; renderMessages();
   }
 }
+async function shuffleCollocation(messageIndex, excludeId){
+  try {
+    const qs=[];
+    if(state.selectedCourseId) qs.push(`course_id=${encodeURIComponent(state.selectedCourseId)}`);
+    if(excludeId) qs.push(`exclude_id=${encodeURIComponent(excludeId)}`);
+    const d=await api(`/learning/collocation/shuffle${qs.length?`?${qs.join("&")}`:""}`);
+    if(!d?.show || !d.collocation) return;
+    const item=state.messages[messageIndex];
+    if(!item) return;
+    item.blocks=[{type:"collocation",collocation:d.collocation}];
+    renderMessages();
+  } catch(e) {
+    toast(e.message||"Không thể đổi Collocation", "error");
+  }
+}
 async function startWelcome() {
   state.messages = []; state.chatHistory = [];
+  const shouldShowCollocation = Boolean(state.showCollocationOnFirstChat) && sessionStorage.getItem("doraemon_collocation_shown_this_login") !== "1";
+  if (shouldShowCollocation) sessionStorage.setItem("doraemon_collocation_shown_this_login", "1");
   try {
-    try {
-      const c = await api(`/learning/collocation/daily${state.selectedCourseId ? `?course_id=${encodeURIComponent(state.selectedCourseId)}` : ""}`);
-      if (c?.show && c.collocation) {
-        const x=c.collocation;
-        const blocks=[
-          {type:"text",text:"💡 **Collocation hôm nay**"},
-          {type:"text",text:`**${x.collocation||""}**\n\n**Nghĩa:** ${x.meaning||""}\n\n**Ví dụ:** ${x.example||""}`}
-        ];
-        if(x.image_url) blocks.push({type:"image",key:`collocation-${x.id}`,url:x.image_url,caption:"Ảnh minh họa cho ví dụ"});
-        blocks.push({type:"text",text:"🌟 Ghi nhớ mẫu này nhé! Bây giờ mình bắt đầu học nào. 😊"});
-        state.messages.push({role:"model",blocks});
-        rememberChatTurn("model",blocks.map(b=>b.type==='text'?b.text:'').filter(Boolean).join("\n\n"));
-      }
-    } catch (ce) { console.warn('Daily collocation skipped:', ce); }
+    if (shouldShowCollocation) {
+      try {
+        const c = await api(`/learning/collocation/daily${state.selectedCourseId ? `?course_id=${encodeURIComponent(state.selectedCourseId)}` : ""}`);
+        if (c?.show && c.collocation) {
+          const block={type:"collocation",collocation:c.collocation};
+          state.messages.push({role:"model",blocks:[block]});
+          rememberChatTurn("model",`Collocation hôm nay: ${c.collocation.collocation||""}. Nghĩa: ${c.collocation.meaning||""}. Ví dụ: ${c.collocation.example||""}`);
+        }
+      } catch (ce) { console.warn('Login-first collocation skipped:', ce); }
+      state.showCollocationOnFirstChat = false;
+    }
     const data = await api(`/session/welcome${state.selectedCourseId ? `?course_id=${encodeURIComponent(state.selectedCourseId)}` : ""}`);
     if (data.message) rememberChatTurn("model", data.message);
     state.messages.push({role:"model",blocks:data.content_blocks?.length ? data.content_blocks : textBlocksFromReply(data.message)});
