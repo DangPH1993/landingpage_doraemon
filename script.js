@@ -67,6 +67,34 @@ function sanitizeRichText(value) {
   const box = document.createElement("div");
   box.innerHTML = src;
   box.querySelectorAll("script,style,iframe,object,embed,link,meta,form,input,button,textarea,select,audio,video,svg,math").forEach(el => el.remove());
+  // Curriculum draft/editor images are served by the Doraemon API under /media/... .
+  // Preserve only safe <img> elements and normalize relative media URLs to API_BASE.
+  box.querySelectorAll("img").forEach(img => {
+    const raw = String(img.getAttribute("src") || "").trim();
+    if (!raw) { img.remove(); return; }
+    try {
+      const u = new URL(raw, window.location.origin);
+      const isHttp = u.protocol === "http:" || u.protocol === "https:";
+      const sameOrigin = u.origin === window.location.origin;
+      const isApi = API_BASE && u.origin === new URL(API_BASE).origin;
+      const isMedia = u.pathname.startsWith("/media/");
+      if (!isHttp || (!sameOrigin && !isApi) || !isMedia) {
+        img.remove();
+        return;
+      }
+      if (isMedia && !sameOrigin) img.src = u.href;
+      else if (isMedia && sameOrigin) img.src = u.href;
+      img.removeAttribute("srcset");
+      img.removeAttribute("style");
+      img.removeAttribute("width");
+      img.removeAttribute("height");
+      img.setAttribute("loading", "lazy");
+      img.setAttribute("referrerpolicy", "no-referrer");
+      img.setAttribute("alt", img.getAttribute("alt") || "Hình minh họa");
+    } catch {
+      img.remove();
+    }
+  });
 
   // Force persisted newlines to remain visible even when the rich-text HTML
   // contains inline tags such as <b>/<i>/<u>. Browser HTML parsing normally
@@ -94,28 +122,6 @@ function sanitizeRichText(value) {
     const allowed = new Set(["b","strong","i","em","u","br","p","div","span","img"]);
     if (!allowed.has(tag)) {
       el.replaceWith(...Array.from(el.childNodes));
-      return;
-    }
-    if (tag === "img") {
-      const rawSrc = el.getAttribute("src") || "";
-      let safeSrc = "";
-      try {
-        const base = window.location.origin;
-        const u = new URL(rawSrc, base);
-        const okProtocol = u.protocol === "http:" || u.protocol === "https:";
-        const okSameOrigin = u.origin === window.location.origin;
-        const okPath = u.pathname.startsWith("/media/");
-        if (okProtocol && (okSameOrigin ? okPath : true)) safeSrc = u.href;
-      } catch(e) {}
-      if (!safeSrc) { el.remove(); return; }
-      const alt = el.getAttribute("alt") || "";
-      const cls = el.getAttribute("class") || "";
-      while (el.attributes.length) el.removeAttribute(el.attributes[0].name);
-      el.setAttribute("src", safeSrc);
-      el.setAttribute("alt", alt.slice(0, 180));
-      if (cls) el.setAttribute("class", cls);
-      el.setAttribute("loading", "lazy");
-      el.setAttribute("referrerpolicy", "no-referrer");
       return;
     }
     for (const attr of Array.from(el.attributes)) el.removeAttribute(attr.name);
