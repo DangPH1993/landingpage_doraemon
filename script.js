@@ -1,4 +1,8 @@
-const API_BASE = "https://doraemon-pro.onrender.com";
+const API_BASE = (() => {
+  const meta = document.querySelector('meta[name="doraemon-api-base"]');
+  const configured = (window.DORAEMON_API_BASE || meta?.content || '').trim();
+  return (configured || '').replace(/\/$/, '');
+})();
 const TOKEN_KEY = "doraemon_web_access_token";
 const PROFILE_KEY = "doraemon_web_profile";
 
@@ -73,7 +77,10 @@ function sanitizeRichText(value) {
     const raw = String(img.getAttribute("src") || "").trim();
     if (!raw) { img.remove(); return; }
     try {
-      const u = new URL(raw, window.location.origin);
+      const isRelativeMedia = /^\/media\//i.test(raw);
+      const u = isRelativeMedia && API_BASE
+        ? new URL(raw, API_BASE)
+        : new URL(raw, window.location.origin);
       const isHttp = u.protocol === "http:" || u.protocol === "https:";
       const sameOrigin = u.origin === window.location.origin;
       const isApi = API_BASE && u.origin === new URL(API_BASE).origin;
@@ -82,13 +89,9 @@ function sanitizeRichText(value) {
         img.remove();
         return;
       }
-      if (isMedia) {
-        // Draft/editor images are served by the FastAPI server, while this
-        // learning page is hosted on a separate static origin. Relative
-        // /media/... URLs therefore must be resolved against API_BASE, not
-        // window.location.origin.
-        img.src = isApi ? u.href : new URL(u.pathname + u.search, API_BASE).href;
-      }
+      // Relative /media/... links come from the API server, not the static web origin.
+      // Always normalize them to the API base before the browser requests the image.
+      img.src = u.href;
       img.removeAttribute("srcset");
       img.removeAttribute("style");
       img.removeAttribute("width");
