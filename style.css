@@ -139,3 +139,5 @@ button,input,textarea,select,label,
 
 .chat-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
 #freeTutorBtn{border:1px solid rgba(76,111,255,.28);background:linear-gradient(135deg,#eef4ff,#f7f2ff)}
+
+.chat-text img{display:block;max-width:100%;height:auto;margin:12px auto;border-radius:8px}

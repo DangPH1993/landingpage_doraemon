@@ -59,120 +59,101 @@ function markdownToRichHtml(value) {
   return src;
 }
 
+function resolveMediaUrl(raw){
+  const value=String(raw||"").trim();
+  if(!value) return "";
+  try{
+    if(/^\/media\//i.test(value) && API_BASE) return new URL(value,API_BASE).href;
+    return new URL(value,window.location.origin).href;
+  }catch{return value;}
+}
+
 function sanitizeRichText(value) {
   if (value == null || value === "") return "";
-  // Decode legacy escaped tags before rendering. This also fixes old drafts
-  // persisted as &amp;lt;b&amp;gt; / &amp;lt;p&amp;gt;.
   let src = decodeHtmlEntities(value).replace(/\r\n?/g, "\n");
   src = markdownToRichHtml(src);
-  if (!/<\s*(?:b|strong|i|em|u|br|p|div|span|img)\b/i.test(src)) {
-    return nl2br(src);
-  }
   const box = document.createElement("div");
-  box.innerHTML = src;
-  // Legacy drafts can contain a literal text node such as `<img src="/media/...">`
-  // because an older Admin sanitizer did not decode entities before saving.
-  // Convert only safe literal IMG markup back into a real element.
-  const literalImgRe = /<img\s+[^>]*src=[\"']([^\"']+)[\"'][^>]*>/i;
-  const walker0 = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
-  const literalNodes = []; let lit;
-  while ((lit = walker0.nextNode())) {
-    if (literalImgRe.test(lit.nodeValue || "")) literalNodes.push(lit);
+  if (/<\s*(?:b|strong|i|em|u|br|p|div|span|img)\b/i.test(src)) box.innerHTML = src;
+  else box.textContent = src;
+
+  // Legacy/admin content can contain literal IMG markup as a plain text node.
+  // Convert every such occurrence into a real image element before sanitizing.
+  const literalImgRe = /<img\s+[^>]*src=["']([^"']+)["'][^>]*>/ig;
+  const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+  const nodes = []; let node;
+  while ((node = walker.nextNode())) {
+    literalImgRe.lastIndex = 0;
+    if (literalImgRe.test(node.nodeValue || "")) nodes.push(node);
   }
-  literalNodes.forEach(node => {
-    const value = String(node.nodeValue || "");
-    const m = value.match(literalImgRe);
-    if (!m) return;
-    const raw = String(m[1] || "").trim();
-    let u = null;
-    try { u = /^\/media\//i.test(raw) && API_BASE ? new URL(raw, API_BASE) : new URL(raw, window.location.origin); } catch { return; }
-    const ok = (u.protocol === "http:" || u.protocol === "https:") && (u.pathname.startsWith("/media/") && (u.origin === window.location.origin || (API_BASE && u.origin === new URL(API_BASE).origin)));
-    if (!ok) return;
+  nodes.forEach(node => {
+    const text = String(node.nodeValue || "");
+    let last = 0, m;
     const frag = document.createDocumentFragment();
-    const before = value.slice(0, m.index);
-    const after = value.slice((m.index || 0) + m[0].length);
-    if (before) frag.appendChild(document.createTextNode(before));
-    const img = document.createElement("img");
-    img.src = u.href; img.alt = "Hình minh họa"; img.loading = "lazy"; img.referrerPolicy = "no-referrer";
-    frag.appendChild(img);
-    if (after) frag.appendChild(document.createTextNode(after));
+    literalImgRe.lastIndex = 0;
+    while ((m = literalImgRe.exec(text))) {
+      if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+      const raw = String(m[1] || "").trim();
+      try {
+        const u = new URL(resolveMediaUrl(raw), window.location.origin);
+        const isHttp = u.protocol === "http:" || u.protocol === "https:";
+        const isMedia = u.pathname.startsWith("/media/");
+        const isApi = API_BASE ? u.origin === new URL(API_BASE).origin : u.origin === window.location.origin;
+        if (isHttp && isMedia && isApi) {
+          const img = document.createElement("img");
+          img.src = u.href; img.alt = "Hình minh họa"; img.loading = "lazy"; img.referrerPolicy = "no-referrer";
+          frag.appendChild(img);
+        } else {
+          frag.appendChild(document.createTextNode(m[0]));
+        }
+      } catch {
+        frag.appendChild(document.createTextNode(m[0]));
+      }
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
     node.replaceWith(frag);
   });
+
   box.querySelectorAll("script,style,iframe,object,embed,link,meta,form,input,button,textarea,select,audio,video,svg,math").forEach(el => el.remove());
-  // Curriculum draft/editor images are served by the Doraemon API under /media/... .
-  // Preserve only safe <img> elements and normalize relative media URLs to API_BASE.
   box.querySelectorAll("img").forEach(img => {
     const raw = String(img.getAttribute("src") || "").trim();
-    if (!raw) { img.remove(); return; }
     try {
-      const isRelativeMedia = /^\/media\//i.test(raw);
-      const u = isRelativeMedia && API_BASE
-        ? new URL(raw, API_BASE)
-        : new URL(raw, window.location.origin);
+      const u = new URL(resolveMediaUrl(raw), window.location.origin);
       const isHttp = u.protocol === "http:" || u.protocol === "https:";
-      const sameOrigin = u.origin === window.location.origin;
-      const isApi = API_BASE && u.origin === new URL(API_BASE).origin;
       const isMedia = u.pathname.startsWith("/media/");
-      if (!isHttp || (!sameOrigin && !isApi) || !isMedia) {
-        img.remove();
-        return;
-      }
-      // Relative /media/... links come from the API server, not the static web origin.
-      // Always normalize them to the API base before the browser requests the image.
+      const isApi = API_BASE ? u.origin === new URL(API_BASE).origin : u.origin === window.location.origin;
+      if (!isHttp || !isMedia || !isApi) { img.remove(); return; }
       img.src = u.href;
-      img.removeAttribute("srcset");
-      img.removeAttribute("style");
-      img.removeAttribute("width");
-      img.removeAttribute("height");
-      img.setAttribute("loading", "lazy");
-      img.setAttribute("referrerpolicy", "no-referrer");
+      img.removeAttribute("srcset"); img.removeAttribute("style"); img.removeAttribute("width"); img.removeAttribute("height");
+      img.setAttribute("loading", "lazy"); img.setAttribute("referrerpolicy", "no-referrer");
       img.setAttribute("alt", img.getAttribute("alt") || "Hình minh họa");
-    } catch {
-      img.remove();
-    }
-  });
-
-  // Force persisted newlines to remain visible even when the rich-text HTML
-  // contains inline tags such as <b>/<i>/<u>. Browser HTML parsing normally
-  // collapses raw newline characters when white-space is not inherited as
-  // expected. Convert newline characters inside text nodes to explicit <br>
-  // nodes so paragraph breaks survive every rendering path.
-  const walker = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
-  const textNodes = [];
-  let tn;
-  while ((tn = walker.nextNode())) textNodes.push(tn);
-  textNodes.forEach(node => {
-    const value = node.nodeValue || "";
-    if (!/[\n\r]/.test(value)) return;
-    const frag = document.createDocumentFragment();
-    const parts = value.replace(/\r\n?/g, "\n").split("\n");
-    parts.forEach((part, idx) => {
-      if (part) frag.appendChild(document.createTextNode(part));
-      if (idx < parts.length - 1) frag.appendChild(document.createElement("br"));
-    });
-    node.parentNode?.replaceChild(frag, node);
+    } catch { img.remove(); }
   });
 
   box.querySelectorAll("*").forEach(el => {
     const tag = el.tagName.toLowerCase();
     const allowed = new Set(["b","strong","i","em","u","br","p","div","span","img"]);
-    if (!allowed.has(tag)) {
-      el.replaceWith(...Array.from(el.childNodes));
-      return;
-    }
+    if (!allowed.has(tag)) { el.replaceWith(...Array.from(el.childNodes)); return; }
+    if (tag === "img") return;
     for (const attr of Array.from(el.attributes)) el.removeAttribute(attr.name);
-    if (tag === "strong") {
-      const b = document.createElement("b");
-      while (el.firstChild) b.appendChild(el.firstChild);
-      el.replaceWith(b);
-    } else if (tag === "em") {
-      const i = document.createElement("i");
-      while (el.firstChild) i.appendChild(el.firstChild);
-      el.replaceWith(i);
-    }
+    if (tag === "strong") { const b = document.createElement("b"); while (el.firstChild) b.appendChild(el.firstChild); el.replaceWith(b); }
+    else if (tag === "em") { const i = document.createElement("i"); while (el.firstChild) i.appendChild(el.firstChild); el.replaceWith(i); }
+  });
+
+  // Keep plain-text newlines even when the content contains rich HTML.
+  const walker2 = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+  const nodes2 = []; let t;
+  while ((t = walker2.nextNode())) if (/\r|\n/.test(t.nodeValue || "")) nodes2.push(t);
+  nodes2.forEach(t => {
+    const parts = String(t.nodeValue || "").replace(/\r\n?/g, "\n").split("\n");
+    if (parts.length < 2) return;
+    const frag = document.createDocumentFragment();
+    parts.forEach((part, i) => { if (part) frag.appendChild(document.createTextNode(part)); if (i < parts.length - 1) frag.appendChild(document.createElement("br")); });
+    t.replaceWith(frag);
   });
   return box.innerHTML.replace(/\n{3,}/g, "\n\n");
 }
+
 function money(v) { return `${Number(v || 0).toLocaleString("vi-VN")} đ`; }
 function fmtDate(v) { if (!v) return "—"; const d = new Date(v); return Number.isNaN(d.getTime()) ? String(v).slice(0, 16) : d.toLocaleString("vi-VN"); }
 function setToken(token, profile = null) { state.token = token || ""; if (state.token) localStorage.setItem(TOKEN_KEY, state.token); else localStorage.removeItem(TOKEN_KEY); if (profile) { state.profile = profile; localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } }
@@ -357,9 +338,11 @@ function renderBlock(block) {
     return `<div class="chat-typing" aria-live="polite"><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span><span class="chat-typing-dot"></span><span class="chat-typing-label">${escapeHtml(block.text || "Doraemon đang suy nghĩ...")}</span></div>`;
   }
   if (type === "image") {
-    const url = block.url || block.image_url || ""; if (!url) return "";
+    const rawUrl = block.url || block.image_url || "";
+    const url = resolveMediaUrl(rawUrl);
+    if (!url) return "";
     const meta = [block.term, block.reading, block.meaning].filter(Boolean).join(" · ");
-    return `<figure class="chat-image"><img src="${escapeHtml(url)}" alt="${escapeHtml(meta || "Nội dung bài học")}" loading="lazy" onerror="this.closest('figure').classList.add('image-error')"><figcaption>${escapeHtml(meta || block.caption || "")}</figcaption></figure>`;
+    return `<figure class="chat-image"><img src="${escapeHtml(url)}" alt="${escapeHtml(meta || "Nội dung bài học")}" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('figure').classList.add('image-error')"><figcaption>${escapeHtml(meta || block.caption || "")}</figcaption></figure>`;
   }
   if (type === "collocation") {
     const x=block.collocation||{};
