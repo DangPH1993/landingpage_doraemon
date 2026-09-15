@@ -61,12 +61,12 @@ function sanitizeRichText(value) {
   // persisted as &amp;lt;b&amp;gt; / &amp;lt;p&amp;gt;.
   let src = decodeHtmlEntities(value).replace(/\r\n?/g, "\n");
   src = markdownToRichHtml(src);
-  if (!/<\s*(?:b|strong|i|em|u|br|p|div|span)\b/i.test(src)) {
+  if (!/<\s*(?:b|strong|i|em|u|br|p|div|span|img)\b/i.test(src)) {
     return nl2br(src);
   }
   const box = document.createElement("div");
   box.innerHTML = src;
-  box.querySelectorAll("script,style,iframe,object,embed,link,meta,form,input,button,textarea,select,img,audio,video,svg,math").forEach(el => el.remove());
+  box.querySelectorAll("script,style,iframe,object,embed,link,meta,form,input,button,textarea,select,audio,video,svg,math").forEach(el => el.remove());
 
   // Force persisted newlines to remain visible even when the rich-text HTML
   // contains inline tags such as <b>/<i>/<u>. Browser HTML parsing normally
@@ -91,9 +91,31 @@ function sanitizeRichText(value) {
 
   box.querySelectorAll("*").forEach(el => {
     const tag = el.tagName.toLowerCase();
-    const allowed = new Set(["b","strong","i","em","u","br","p","div","span"]);
+    const allowed = new Set(["b","strong","i","em","u","br","p","div","span","img"]);
     if (!allowed.has(tag)) {
       el.replaceWith(...Array.from(el.childNodes));
+      return;
+    }
+    if (tag === "img") {
+      const rawSrc = el.getAttribute("src") || "";
+      let safeSrc = "";
+      try {
+        const base = window.location.origin;
+        const u = new URL(rawSrc, base);
+        const okProtocol = u.protocol === "http:" || u.protocol === "https:";
+        const okSameOrigin = u.origin === window.location.origin;
+        const okPath = u.pathname.startsWith("/media/");
+        if (okProtocol && (okSameOrigin ? okPath : true)) safeSrc = u.href;
+      } catch(e) {}
+      if (!safeSrc) { el.remove(); return; }
+      const alt = el.getAttribute("alt") || "";
+      const cls = el.getAttribute("class") || "";
+      while (el.attributes.length) el.removeAttribute(el.attributes[0].name);
+      el.setAttribute("src", safeSrc);
+      el.setAttribute("alt", alt.slice(0, 180));
+      if (cls) el.setAttribute("class", cls);
+      el.setAttribute("loading", "lazy");
+      el.setAttribute("referrerpolicy", "no-referrer");
       return;
     }
     for (const attr of Array.from(el.attributes)) el.removeAttribute(attr.name);
