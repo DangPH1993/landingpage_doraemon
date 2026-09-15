@@ -82,8 +82,13 @@ function sanitizeRichText(value) {
         img.remove();
         return;
       }
-      if (isMedia && !sameOrigin) img.src = u.href;
-      else if (isMedia && sameOrigin) img.src = u.href;
+      if (isMedia) {
+        // Draft/editor images are served by the FastAPI server, while this
+        // learning page is hosted on a separate static origin. Relative
+        // /media/... URLs therefore must be resolved against API_BASE, not
+        // window.location.origin.
+        img.src = isApi ? u.href : new URL(u.pathname + u.search, API_BASE).href;
+      }
       img.removeAttribute("srcset");
       img.removeAttribute("style");
       img.removeAttribute("width");
