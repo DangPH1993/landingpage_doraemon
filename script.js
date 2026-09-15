@@ -70,6 +70,34 @@ function sanitizeRichText(value) {
   }
   const box = document.createElement("div");
   box.innerHTML = src;
+  // Legacy drafts can contain a literal text node such as `<img src="/media/...">`
+  // because an older Admin sanitizer did not decode entities before saving.
+  // Convert only safe literal IMG markup back into a real element.
+  const literalImgRe = /<img\s+[^>]*src=[\"']([^\"']+)[\"'][^>]*>/i;
+  const walker0 = document.createTreeWalker(box, NodeFilter.SHOW_TEXT);
+  const literalNodes = []; let lit;
+  while ((lit = walker0.nextNode())) {
+    if (literalImgRe.test(lit.nodeValue || "")) literalNodes.push(lit);
+  }
+  literalNodes.forEach(node => {
+    const value = String(node.nodeValue || "");
+    const m = value.match(literalImgRe);
+    if (!m) return;
+    const raw = String(m[1] || "").trim();
+    let u = null;
+    try { u = /^\/media\//i.test(raw) && API_BASE ? new URL(raw, API_BASE) : new URL(raw, window.location.origin); } catch { return; }
+    const ok = (u.protocol === "http:" || u.protocol === "https:") && (u.pathname.startsWith("/media/") && (u.origin === window.location.origin || (API_BASE && u.origin === new URL(API_BASE).origin)));
+    if (!ok) return;
+    const frag = document.createDocumentFragment();
+    const before = value.slice(0, m.index);
+    const after = value.slice((m.index || 0) + m[0].length);
+    if (before) frag.appendChild(document.createTextNode(before));
+    const img = document.createElement("img");
+    img.src = u.href; img.alt = "Hình minh họa"; img.loading = "lazy"; img.referrerPolicy = "no-referrer";
+    frag.appendChild(img);
+    if (after) frag.appendChild(document.createTextNode(after));
+    node.replaceWith(frag);
+  });
   box.querySelectorAll("script,style,iframe,object,embed,link,meta,form,input,button,textarea,select,audio,video,svg,math").forEach(el => el.remove());
   // Curriculum draft/editor images are served by the Doraemon API under /media/... .
   // Preserve only safe <img> elements and normalize relative media URLs to API_BASE.
