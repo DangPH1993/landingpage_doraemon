@@ -431,7 +431,8 @@ async function sendChat(prompt, imageBase64 = null, proactive = false, action = 
 }
 function featureKindLabel(kind){ return kind === "phrasal_verb" ? "Phrasal verb" : "Collocation"; }
 function featureEndpoint(kind, mode){ return `/learning/${kind === "phrasal_verb" ? "phrasal-verb" : "collocation"}/${mode}`; }
-function featureDataKey(kind){ return kind === "phrasal_verb" ? "phrasalVerb" : "collocation"; }
+function featureDataKey(kind){ return kind === "phrasal_verb" ? "phrasal_verb" : "collocation"; }
+function featureBlockKey(kind){ return kind === "phrasal_verb" ? "phrasalVerb" : "collocation"; }
 function featureTerm(item, kind){ return kind === "phrasal_verb" ? (item?.phrasal_verb || "") : (item?.collocation || ""); }
 function setFeatureHistory(item, kind){
   state.chatHistory = [];
@@ -458,15 +459,17 @@ async function showLearningFeature(kind){
     const qs=[];
     if(state.selectedCourseId) qs.push(`course_id=${encodeURIComponent(state.selectedCourseId)}`);
     const d=await api(`${featureEndpoint(kind,"daily")}${qs.length ? `?${qs.join("&")}` : ""}`);
-    if(!d?.show || !d?.[featureDataKey(kind)]){
+    const apiKey=featureDataKey(kind);
+    const blockKey=featureBlockKey(kind);
+    if(!d?.show || !d?.[apiKey]){
       state.messages=[{role:"model",blocks:[{type:"text",text:`Hiện chưa có ${label} nào trong khóa học này.`}]}];
       renderMessages();
       return;
     }
-    const item=d[featureDataKey(kind)];
+    const item=d[apiKey];
     state.activeFeatureItem=item;
     setFeatureHistory(item, kind);
-    state.messages=[{role:"model",blocks:[{type:"text",text:`Đây là một ${label} để mình học cùng nhau nhé.`},{type:kind, [featureDataKey(kind)]:item}]}];
+    state.messages=[{role:"model",blocks:[{type:"text",text:`Đây là một ${label} để mình học cùng nhau nhé.`},{type:kind, [blockKey]:item}]}];
     renderMessages();
   } catch(e) {
     state.messages=[{role:"model",blocks:[{type:"text",text:`Không thể tải ${label}: ${e.message}`}]}];
@@ -480,6 +483,7 @@ async function shuffleLearningFeature(kind, messageIndex, excludeId){
     if(excludeId) qs.push(`exclude_id=${encodeURIComponent(excludeId)}`);
     const d=await api(`${featureEndpoint(kind,"shuffle")}${qs.length ? `?${qs.join("&")}` : ""}`);
     const key=featureDataKey(kind);
+    const blockKey=featureBlockKey(kind);
     const item=d?.[key];
     if(!d?.show || !item) return;
     state.activeFeature=kind;
@@ -488,9 +492,9 @@ async function shuffleLearningFeature(kind, messageIndex, excludeId){
     const idx=Number(messageIndex);
     const target=state.messages[idx];
     if(target){
-      target.blocks=[{type:"text",text:`Đổi sang một ${featureKindLabel(kind)} khác nhé.`},{type:kind,[key]:item}];
+      target.blocks=[{type:"text",text:`Đổi sang một ${featureKindLabel(kind)} khác nhé.`},{type:kind,[blockKey]:item}];
     } else {
-      state.messages=[{role:"model",blocks:[{type:"text",text:`Đổi sang một ${featureKindLabel(kind)} khác nhé.`},{type:kind,[key]:item}]}];
+      state.messages=[{role:"model",blocks:[{type:"text",text:`Đổi sang một ${featureKindLabel(kind)} khác nhé.`},{type:kind,[blockKey]:item}]}];
     }
     renderMessages();
   } catch(e) {
