@@ -213,7 +213,9 @@ async function loadMe() {
 async function login(phone, password) {
   const data = await api("/auth/login", { method: "POST", body: { phone, password } });
   setToken(data.access_token, data.user);
+  sessionStorage.removeItem("doraemon_features_shown_this_login");
   sessionStorage.removeItem("doraemon_collocation_shown_this_login");
+  sessionStorage.removeItem("doraemon_phrasal_verb_shown_this_login");
   state.showCollocationOnFirstChat = true;
   await loadMe();
   closeAuth();
@@ -223,13 +225,17 @@ async function login(phone, password) {
 async function register(phone, nickname, password) {
   const data = await api("/auth/register", { method: "POST", body: { phone, nickname, password } });
   setToken(data.access_token || "", data.user || { phone, nickname });
+  sessionStorage.removeItem("doraemon_features_shown_this_login");
   sessionStorage.removeItem("doraemon_collocation_shown_this_login");
+  sessionStorage.removeItem("doraemon_phrasal_verb_shown_this_login");
   state.showCollocationOnFirstChat = true;
   if (!state.token) { await login(phone, password); return; }
   await loadMe(); closeAuth(); toast("Tạo tài khoản thành công", "success"); location.hash = "#/app";
 }
 function logout(showToast = true) {
-  state.token = ""; state.profile = null; state.courses = []; state.chatHistory = []; state.messages = []; state.chatboxNew = true; state.showCollocationOnFirstChat = false; state.activeFeature = ""; state.activeFeatureItem = null; sessionStorage.removeItem("doraemon_collocation_shown_this_login");
+  state.token = ""; state.profile = null; state.courses = []; state.chatHistory = []; state.messages = []; state.chatboxNew = true; state.showCollocationOnFirstChat = false; state.activeFeature = ""; state.activeFeatureItem = null; sessionStorage.removeItem("doraemon_features_shown_this_login");
+  sessionStorage.removeItem("doraemon_collocation_shown_this_login");
+  sessionStorage.removeItem("doraemon_phrasal_verb_shown_this_login");
   localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(PROFILE_KEY);
   if (showToast) toast("Đã đăng xuất", "success");
   location.hash = "#";
@@ -496,19 +502,31 @@ async function startWelcome() {
   state.activeFeature = "";
   state.activeFeatureItem = null;
   state.messages = []; state.chatHistory = [];
-  const shouldShowCollocation = Boolean(state.showCollocationOnFirstChat) && sessionStorage.getItem("doraemon_collocation_shown_this_login") !== "1";
-  if (shouldShowCollocation) sessionStorage.setItem("doraemon_collocation_shown_this_login", "1");
+  const shouldShowFeatures = Boolean(state.showCollocationOnFirstChat) && sessionStorage.getItem("doraemon_features_shown_this_login") !== "1";
+  if (shouldShowFeatures) sessionStorage.setItem("doraemon_features_shown_this_login", "1");
   try {
-    if (shouldShowCollocation) {
+    if (shouldShowFeatures) {
+      let featureShown = false;
       try {
         const c = await api(`/learning/collocation/daily${state.selectedCourseId ? `?course_id=${encodeURIComponent(state.selectedCourseId)}` : ""}`);
         if (c?.show && c.collocation) {
           const block={type:"collocation",collocation:c.collocation};
           state.messages.push({role:"model",blocks:[block]});
           rememberChatTurn("model",`Collocation hôm nay: ${c.collocation.collocation||""}. Nghĩa: ${c.collocation.meaning||""}. Ví dụ: ${c.collocation.example||""}`);
+          featureShown = true;
         }
       } catch (ce) { console.warn('Login-first collocation skipped:', ce); }
+      try {
+        const p = await api(`/learning/phrasal-verb/daily${state.selectedCourseId ? `?course_id=${encodeURIComponent(state.selectedCourseId)}` : ""}`);
+        if (p?.show && p.phrasal_verb) {
+          const block={type:"phrasal_verb",phrasalVerb:p.phrasal_verb};
+          state.messages.push({role:"model",blocks:[block]});
+          rememberChatTurn("model",`Phrasal verb hôm nay: ${p.phrasal_verb.phrasal_verb||""}. Nghĩa: ${p.phrasal_verb.meaning||""}. Ví dụ: ${p.phrasal_verb.example||""}`);
+          featureShown = true;
+        }
+      } catch (pe) { console.warn('Login-first phrasal verb skipped:', pe); }
       state.showCollocationOnFirstChat = false;
+      if (featureShown) renderMessages();
     }
     const data = await api(`/session/welcome${state.selectedCourseId ? `?course_id=${encodeURIComponent(state.selectedCourseId)}` : ""}`);
     if (data.message) rememberChatTurn("model", data.message);
