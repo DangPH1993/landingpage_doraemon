@@ -137,24 +137,25 @@ button,input,textarea,select,label,
   object-fit:contain!important;
 }
 
-.chat-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.chat-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:nowrap;justify-content:flex-end;white-space:nowrap}
 #freeTutorBtn{border:1px solid rgba(76,111,255,.28);background:linear-gradient(135deg,#eef4ff,#f7f2ff)}
 
 .chat-text img{display:block;max-width:100%;height:auto;margin:12px auto;border-radius:8px}
 
-/* v37: Collocation / Phrasal verb quick-learning buttons */
+/* v38: Collocation / Phrasal verb quick-learning buttons */
 .feature-launch-button{
-  border:1px solid #93c5fd;
-  background:#eff6ff;
-  color:#1d4ed8;
+  border:1px solid rgba(99,102,241,.24);
+  background:linear-gradient(135deg,#eaf2ff 0%,#f3ebff 100%);
+  color:#2457d6;
   border-radius:12px;
   padding:9px 12px;
   font-size:12px;
   font-weight:800;
   cursor:pointer;
+  white-space:nowrap;
 }
-.feature-launch-button:hover{background:#eef6ff;border-color:#60a5fa}
+.feature-launch-button:hover{background:linear-gradient(135deg,#dfeaff 0%,#ede2ff 100%);border-color:rgba(79,70,229,.34);transform:translateY(-1px)}
 .feature-launch-button:focus-visible{outline:3px solid rgba(59,130,246,.20);outline-offset:2px}
 .phrasal-verb-shuffle{width:38px!important;height:38px!important;flex:0 0 38px!important;border-radius:10px!important;border:1px solid #bfdbfe!important;background:#eff6ff!important;color:#2563eb!important;font-size:18px!important;cursor:pointer!important;display:grid!important;place-items:center!important;visibility:visible!important;opacity:1!important}
 .phrasal-verb-shuffle:hover{background:#eef4ff;border-color:#bfdbfe;color:#2563eb}
-@media (max-width:720px){.chat-toolbar-actions{width:100%;justify-content:flex-start}.feature-launch-button{flex:1 1 auto}}
+@media (max-width:720px){.chat-toolbar-actions{width:100%;justify-content:flex-start;overflow-x:auto;padding-bottom:2px}.feature-launch-button{flex:0 0 auto}}
