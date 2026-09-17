@@ -24,6 +24,7 @@ const state = {
   activeFeatureItem: null,
   freeChatTutor: false,
   phrasingTask: "",
+  phrasingContext: [],
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -687,7 +688,7 @@ async function renderChat(el) {
   $("#collocationBtn").onclick = () => showLearningFeature("collocation");
   $("#phrasalVerbBtn").onclick = () => showLearningFeature("phrasal_verb");
   $("#phrasingBtn").onclick = () => launchPhrasing();
-  $("#newChatBtn").onclick = () => { state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`; state.chatboxNew=true; state.messages=[]; state.chatHistory=[]; state.activeContentType=""; state.activeLesson=""; state.activeFeature=""; state.activeFeatureItem=null; state.freeChatTutor=false; state.phrasingTask=""; startWelcome(); };
+  $("#newChatBtn").onclick = () => { state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`; state.chatboxNew=true; state.messages=[]; state.chatHistory=[]; state.activeContentType=""; state.activeLesson=""; state.activeFeature=""; state.activeFeatureItem=null; state.freeChatTutor=false; state.phrasingTask=""; state.phrasingContext=[]; startWelcome(); };
   const launchTutor = async () => {
     state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;
     state.chatboxNew=true; state.messages=[]; state.chatHistory=[];
@@ -823,7 +824,10 @@ function phrasingResetState(){
   state.freeChatTutor=false;
   state.phrasingTask="";
 }
-async function launchPhrasing(){
+async function launchPhrasing(options={}){
+  // Use the five most recent messages as context for the Phrasing flow.
+  const incomingContext = Array.isArray(options.context) ? options.context.slice(-5) : state.chatHistory.slice(-5);
+  state.phrasingContext = incomingContext;
   state.view="chat";
   state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;
   state.chatboxNew=true;
@@ -834,7 +838,7 @@ async function launchPhrasing(){
   const bubble=addChatMessage("model",[{type:"typing",text:"Doraemon đang chọn một thử thách Phrasing..."}]);
   renderMessages();
   try{
-    const d=await api("/learning/phrasing/start",{method:"POST",body:{course_id:Number(state.selectedCourseId||0)}});
+    const d=await api("/learning/phrasing/start",{method:"POST",body:{course_id:Number(state.selectedCourseId||0),chat_history:incomingContext.slice(-5)}});
     state.phrasingTask=String(d.task||d.reply||"").trim();
     bubble.blocks=[{type:"text",text:d.reply||"👉 Hãy diễn đạt ý này bằng tiếng Anh nhé."}];
     rememberChatTurn("model",d.reply||"");
@@ -849,10 +853,11 @@ async function sendPhrasingAnswer(answer){
   if(!text || !state.phrasingTask) return;
   addChatMessage("user",textBlocksFromReply(text));
   rememberChatTurn("user",text);
+  const recentHistory=state.chatHistory.slice(-5);
   const bubble=addChatMessage("model",[{type:"typing",text:"Doraemon đang xem cách diễn đạt của cậu..."}]);
   renderMessages();
   try{
-    const d=await api("/learning/phrasing/evaluate",{method:"POST",body:{course_id:Number(state.selectedCourseId||0),task:state.phrasingTask,answer:text}});
+    const d=await api("/learning/phrasing/evaluate",{method:"POST",body:{course_id:Number(state.selectedCourseId||0),task:state.phrasingTask,answer:text,chat_history:recentHistory}});
     bubble.blocks=[{type:"text",text:d.reply||"Doraemon chưa có phản hồi."}];
     if(d.reply) rememberChatTurn("model",d.reply);
     renderMessages();
@@ -865,8 +870,9 @@ async function sendPhrasingAnswer(answer){
   }
 }
 async function startNextPhrasing(){
+  const context=state.chatHistory.slice(-5);
   state.phrasingTask="";
-  await launchPhrasing();
+  await launchPhrasing({context});
 }
 async function renderPackages(el){const [me,pkgs]=await Promise.all([api("/auth/me"),api("/payments/packages")]); const sub=me.subscription||{}; el.innerHTML=`<div class="page-grid"><section class="page-card"><div class="card-head"><div><strong>Gói học</strong><small>Thông tin hiện tại của tài khoản</small></div></div><div class="subscription-banner"><div><span>Gói hiện tại</span><strong>${escapeHtml(sub.plan||"Free")}</strong></div><div><span>Trạng thái</span><strong>${escapeHtml(sub.status||"ACTIVE")}</strong></div><div><span>Hết hạn</span><strong>${escapeHtml(sub.expires_at_vn||"Không giới hạn")}</strong></div></div><div class="package-grid">${(pkgs.packages||[]).map(p=>`<div class="package-card"><span class="package-month">${p.months} tháng</span><h3>${escapeHtml(p.plan_name||"")}</h3><strong>${escapeHtml(p.price_display||money(p.price_vnd))}</strong>${p.qr_url?`<img src="${escapeHtml(p.qr_url)}" alt="QR thanh toán" class="qr-img">`:``}<div class="payment-code">${escapeHtml(p.payment_content||"")}</div><button class="small-button copy-payment" data-copy="${escapeHtml(p.payment_content||"")}">Sao chép nội dung</button></div>`).join("")}</div></section><aside class="page-card"><h3>🎓 Khóa học được cấp quyền</h3>${(sub.courses||[]).length?(sub.courses||[]).map(c=>`<div class="course-entitlement"><strong>${escapeHtml(c.name||"")}</strong><span>${escapeHtml(c.expires_at_vn||"Đang hiệu lực")}</span></div>`).join(""):`<div class="empty-state">Tài khoản hiện chưa có khóa học trả phí.</div>`}</aside></div>`; $$(".copy-payment").forEach(b=>b.onclick=async()=>{try{await navigator.clipboard.writeText(b.dataset.copy);toast("Đã sao chép","success");}catch{toast("Không thể sao chép tự động","error");}});}
 
