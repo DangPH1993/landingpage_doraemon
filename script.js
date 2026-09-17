@@ -89,8 +89,19 @@ function ensureLibraryFilterStyles(){
     .library-filters{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 14px;padding:10px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fbff}
     .library-filter{display:flex;flex-direction:column;gap:4px;min-width:0}
     .library-filter label{font-size:11px;font-weight:800;color:#64748b}
-    .library-filter select{width:100%;height:34px;border:1px solid #d8e2ef;border-radius:9px;background:#fff;padding:0 9px;color:#1e293b;font-size:12px;outline:none}
-    .library-filter select:focus{border-color:#7c9cff;box-shadow:0 0 0 3px rgba(59,130,246,.08)}
+    .library-filter-multi{position:relative;min-width:0}
+    .library-filter-trigger{width:100%;height:34px;display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #d8e2ef;border-radius:9px;background:#fff;padding:0 9px;color:#1e293b;font-size:12px;outline:none;cursor:pointer;text-align:left}
+    .library-filter-trigger:hover{border-color:#b9c9df}
+    .library-filter-multi.open .library-filter-trigger{border-color:#7c9cff;box-shadow:0 0 0 3px rgba(59,130,246,.08)}
+    .library-filter-chevron{font-size:10px;color:#64748b;transition:transform .15s ease}
+    .library-filter-multi.open .library-filter-chevron{transform:rotate(180deg)}
+    .library-filter-menu{position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:60;display:none;max-height:220px;overflow:auto;padding:5px;border:1px solid #d8e2ef;border-radius:10px;background:#fff;box-shadow:0 12px 26px rgba(15,23,42,.12)}
+    .library-filter-multi.open .library-filter-menu{display:block}
+    .library-filter-option{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;font-size:12px;color:#334155;cursor:pointer;user-select:none}
+    .library-filter-option:hover{background:#f1f5ff}
+    .library-filter-option input{width:14px;height:14px;margin:0;accent-color:#3b82f6}
+    .library-filter-option.all-option{border-bottom:1px solid #eef2f7;margin-bottom:3px;padding-bottom:8px;font-weight:700}
+    .library-filter-count{font-size:10px;color:#64748b;margin-left:auto}
     .library-filter-empty{padding:12px;border:1px dashed #cbd5e1;border-radius:10px;color:#64748b;font-size:12px;text-align:center;background:#fff}
     @media(max-width:700px){.library-filters{grid-template-columns:1fr}}
   `;
@@ -678,8 +689,14 @@ async function renderChat(el) {
       return `<button class="lesson-card compact" data-lesson="${escapeHtml(r.lesson)}" data-type="${escapeHtml(actualType)}" data-topic="${escapeHtml(r.topic||"")}" data-status="${escapeHtml(st.cls)}"><div class="lesson-card-copy"><strong>${escapeHtml(r.lesson)}</strong>${r.topic?`<small>${escapeHtml(r.topic)}</small>`:""}</div><span class="lesson-status-tag ${st.cls}">${st.label}</span><span class="lesson-card-open">Học →</span></button>`;
     }).join("")}</div>`).join("");
     ensureLibraryFilterStyles();
-    const filterTypeOptions=[`<option value="">Tất cả loại nội dung</option>`,...types.map(t=>`<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`)].join("");
-    const libraryHtml = `<div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">${docs.length} mục</span></div><button class="tutor-launch-card" id="freeTutorBtn"><span class="tutor-launch-avatar" aria-hidden="true"><img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy"></span><span class="tutor-launch-copy"><strong>Trò chuyện cùng gia sư</strong><small>Doraemon sẽ đồng hành và giúp cậu cải thiện những điểm còn yếu.</small></span><span class="tutor-launch-arrow">→</span></button><div class="library-filters"><div class="library-filter"><label for="libraryTypeFilter">Loại nội dung</label><select id="libraryTypeFilter">${filterTypeOptions}</select></div><div class="library-filter"><label for="libraryStatusFilter">Trạng thái học</label><select id="libraryStatusFilter"><option value="">Tất cả trạng thái</option><option value="not-started">Chưa học</option><option value="in-progress">Đang học dở</option><option value="completed">Đã học</option></select></div></div>${sections || `<div class="empty-state">Chưa có nội dung được cấp quyền.</div>`}<div id="libraryFilterEmpty" class="library-filter-empty" style="display:none">Không có bài nào khớp với bộ lọc hiện tại.</div><div class="library-note">💡 Chọn bài để Doraemon mở đúng ngữ cảnh học. Dùng bộ lọc phía trên để tìm nhanh theo loại nội dung hoặc trạng thái học.</div>`;
+    const typeFilterOptions=types.map(t=>`<label class="library-filter-option"><input type="checkbox" value="${escapeHtml(t)}"> <span>${escapeHtml(t)}</span></label>`).join("");
+    const statusOptions=[
+      ["not-started","Chưa học"],
+      ["in-progress","Đang học dở"],
+      ["completed","Đã học"]
+    ].map(([value,label])=>`<label class="library-filter-option"><input type="checkbox" value="${escapeHtml(value)}"> <span>${escapeHtml(label)}</span></label>`).join("");
+    const makeMultiFilter=(id,label,allLabel,options)=>`<div class="library-filter"><label>${escapeHtml(label)}</label><div class="library-filter-multi" id="${id}" data-filter-key="${id.includes("Type")?"type":"status"}"><button type="button" class="library-filter-trigger" aria-haspopup="listbox" aria-expanded="false"><span class="library-filter-label">Tất cả</span><span class="library-filter-chevron">▾</span></button><div class="library-filter-menu" role="listbox"><label class="library-filter-option all-option"><input type="checkbox" value="" checked> <span>${escapeHtml(allLabel)}</span></label>${options}</div></div></div>`;
+    const libraryHtml = `<div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">${docs.length} mục</span></div><button class="tutor-launch-card" id="freeTutorBtn"><span class="tutor-launch-avatar" aria-hidden="true"><img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy"></span><span class="tutor-launch-copy"><strong>Trò chuyện cùng gia sư</strong><small>Doraemon sẽ đồng hành và giúp cậu cải thiện những điểm còn yếu.</small></span><span class="tutor-launch-arrow">→</span></button><div class="library-filters">${makeMultiFilter("libraryTypeFilter","Loại nội dung","Tất cả loại nội dung",typeFilterOptions)}${makeMultiFilter("libraryStatusFilter","Trạng thái học","Tất cả trạng thái",statusOptions)}</div>${sections || `<div class="empty-state">Chưa có nội dung được cấp quyền.</div>`}<div id="libraryFilterEmpty" class="library-filter-empty" style="display:none">Không có bài nào khớp với bộ lọc hiện tại.</div><div class="library-note">💡 Chọn bài để Doraemon mở đúng ngữ cảnh học. Dùng bộ lọc phía trên để tìm nhanh theo loại nội dung hoặc trạng thái học.</div>`;
     $(".study-library").innerHTML=libraryHtml;
   } catch (e) {
     $(".study-library").innerHTML = `<div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div></div><div class="empty-state error">${escapeHtml(e.message)}</div>`;
@@ -698,15 +715,61 @@ async function renderChat(el) {
   };
   $("#freeTutorBtn").onclick = launchTutor;
   const typeFilter=$("#libraryTypeFilter"), statusFilter=$("#libraryStatusFilter"), filterEmpty=$("#libraryFilterEmpty");
+  const getCheckedValues=(control)=>new Set($$("input[type=checkbox]:checked",control).map(x=>String(x.value||"")).filter(Boolean));
+  const updateMultiFilterLabel=(control)=>{
+    if(!control) return;
+    const checked=[...$$('input[type="checkbox"]',control)].filter(x=>x.checked && x.value);
+    const label=control.querySelector(".library-filter-label");
+    if(label) label.textContent=checked.length===0?"Tất cả":checked.length===1?checked[0].parentElement?.querySelector("span")?.textContent||"1 đã chọn":`${checked.length} đã chọn`;
+    const all=control.querySelector('input[type="checkbox"][value=""]');
+    if(all) all.checked=checked.length===0;
+  };
+  const setupMultiFilter=(control)=>{
+    if(!control) return;
+    const trigger=control.querySelector(".library-filter-trigger");
+    const all=control.querySelector('input[type="checkbox"][value=""]');
+    const options=$$(".library-filter-menu input[type=checkbox]",control);
+    trigger?.addEventListener("click",e=>{
+      e.stopPropagation();
+      const isOpen=control.classList.toggle("open");
+      trigger.setAttribute("aria-expanded",isOpen?"true":"false");
+      $$(".library-filter-multi.open").forEach(other=>{if(other!==control){other.classList.remove("open");other.querySelector(".library-filter-trigger")?.setAttribute("aria-expanded","false");}});
+    });
+    all?.addEventListener("change",()=>{
+      if(all.checked) options.forEach(x=>{if(x!==all)x.checked=false;});
+      updateMultiFilterLabel(control);
+      applyLibraryFilters();
+    });
+    options.filter(x=>x!==all).forEach(x=>x.addEventListener("change",()=>{
+      if(x.checked && all) all.checked=false;
+      updateMultiFilterLabel(control);
+      applyLibraryFilters();
+    }));
+    updateMultiFilterLabel(control);
+  };
+  setupMultiFilter(typeFilter);
+  setupMultiFilter(statusFilter);
+  const closeLibraryFilters=(e)=>{
+    if(e.target.closest(".library-filter-multi")) return;
+    $$(".library-filter-multi.open").forEach(control=>{
+      control.classList.remove("open");
+      control.querySelector(".library-filter-trigger")?.setAttribute("aria-expanded","false");
+    });
+  };
+  if(window.__doraemonLibraryFilterOutsideHandler) document.removeEventListener("click",window.__doraemonLibraryFilterOutsideHandler);
+  window.__doraemonLibraryFilterOutsideHandler=closeLibraryFilters;
+  document.addEventListener("click",closeLibraryFilters);
   const applyLibraryFilters=()=>{
-    const type=String(typeFilter?.value||"");
-    const status=String(statusFilter?.value||"");
+    const typesSelected=getCheckedValues(typeFilter);
+    const statusesSelected=getCheckedValues(statusFilter);
     let visibleCount=0;
     $$(".lesson-section",$(".study-library")).forEach(section=>{
       let sectionVisible=0;
       $$(".lesson-card.compact",section).forEach(card=>{
-        const typeOk=!type || String(card.dataset.type||"")===type;
-        const statusOk=!status || String(card.dataset.status||"")===status;
+        const type=String(card.dataset.type||"");
+        const status=String(card.dataset.status||"");
+        const typeOk=!typesSelected.size || typesSelected.has(type);
+        const statusOk=!statusesSelected.size || statusesSelected.has(status);
         const show=typeOk&&statusOk;
         card.style.display=show?"":"none";
         if(show){sectionVisible++;visibleCount++;}
@@ -717,8 +780,6 @@ async function renderChat(el) {
     });
     if(filterEmpty) filterEmpty.style.display=visibleCount?"none":"";
   };
-  typeFilter?.addEventListener("change",applyLibraryFilters);
-  statusFilter?.addEventListener("change",applyLibraryFilters);
   applyLibraryFilters();
   const input=$("#chatInput"); const send=()=>{const v=input.value.trim(); if(!v)return; input.value=""; autoGrow(input); if(state.activeFeature==="phrasing" && state.phrasingTask){ sendPhrasingAnswer(v); return; } sendChat(v);}; $("#sendBtn").onclick=send; input.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();} }); input.addEventListener("input",()=>autoGrow(input));
   $$(".lesson-card", el).forEach(x=>x.onclick=()=>startLesson(x.dataset.lesson,x.dataset.type,x.dataset.topic||""));
