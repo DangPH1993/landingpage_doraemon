@@ -61,6 +61,81 @@ function markdownToRichHtml(value) {
   return src;
 }
 
+function ensureAutoPipeTableStyles() {
+  if (document.getElementById("doraemon-auto-pipe-table-styles")) return;
+  const style = document.createElement("style");
+  style.id = "doraemon-auto-pipe-table-styles";
+  style.textContent = `
+    .rich-table-wrap{width:100%;overflow-x:auto;margin:12px 0 14px;border:1px solid #dbe4ee;border-radius:12px;background:#fff;-webkit-overflow-scrolling:touch}
+    .rich-auto-table{width:100%;min-width:520px;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:13px;line-height:1.5}
+    .rich-auto-table td,.rich-auto-table th{padding:9px 10px;border-right:1px solid #e5ebf2;border-bottom:1px solid #e5ebf2;vertical-align:top;text-align:left;overflow-wrap:anywhere;word-break:break-word}
+    .rich-auto-table tr:last-child td,.rich-auto-table tr:last-child th{border-bottom:0}
+    .rich-auto-table td:last-child,.rich-auto-table th:last-child{border-right:0}
+    .rich-auto-table th{font-weight:800;background:#f7faff;color:#1e3a8a}
+    .rich-auto-table td{background:#fff;color:#334155}
+    .rich-auto-table tr:nth-child(even) td{background:#fbfdff}
+    @media(max-width:700px){.rich-table-wrap{margin-left:-2px;margin-right:-2px;width:calc(100% + 4px)}.rich-auto-table{min-width:460px;font-size:12px}.rich-auto-table td,.rich-auto-table th{padding:8px}}
+  `;
+  document.head.appendChild(style);
+}
+
+function pipeRowsToHtml(value) {
+  const lines = String(value ?? "").replace(/\r\n?/g, "\n").split("\n");
+  const out = [];
+  let i = 0;
+
+  const parseRow = (line) => {
+    const raw = String(line ?? "").trim();
+    if ((raw.match(/\|/g) || []).length < 2) return null;
+    const cells = raw.replace(/^\s*\|\s*/, "").replace(/\s*\|\s*$/, "").split("|").map(x => x.trim());
+    if (cells.length < 3) return null;
+    if (cells.every(c => /^:?-{3,}:?$/.test(c))) return {separator:true,cells};
+    return {separator:false,cells};
+  };
+
+  while (i < lines.length) {
+    const row = parseRow(lines[i]);
+    if (!row) { out.push(lines[i]); i++; continue; }
+
+    let j = i;
+    const rows = [];
+    while (j < lines.length) {
+      const r = parseRow(lines[j]);
+      if (!r) break;
+      rows.push(r);
+      j++;
+    }
+
+    // Only convert a contiguous pipe-separated block. This avoids turning
+    // ordinary prose containing a single | character into a table.
+    if (rows.length === 1 && rows[0].cells.length < 4) {
+      out.push(lines[i]);
+      i++;
+      continue;
+    }
+
+    const separatorIndex = rows.findIndex(r => r.separator);
+    const hasMarkdownHeader = separatorIndex === 1;
+    const dataRows = rows.filter(r => !r.separator);
+    const columnCount = Math.max(...dataRows.map(r => r.cells.length));
+    const normalizeCells = cells => Array.from({length:columnCount}, (_, idx) => String(cells[idx] ?? ""));
+
+    ensureAutoPipeTableStyles();
+    let html = '<div class="rich-table-wrap"><table class="rich-auto-table">';
+    if (hasMarkdownHeader && dataRows.length >= 1) {
+      html += "<thead><tr>" + normalizeCells(dataRows[0].cells).map(c => `<th>${markdownToRichHtml(escapeHtml(c))}</th>`).join("") + "</tr></thead>";
+      html += "<tbody>" + dataRows.slice(1).map(r => `<tr>${normalizeCells(r.cells).map(c => `<td>${markdownToRichHtml(escapeHtml(c))}</td>`).join("")}</tr>`).join("") + "</tbody>";
+    } else {
+      html += "<tbody>" + dataRows.map(r => `<tr>${normalizeCells(r.cells).map(c => `<td>${markdownToRichHtml(escapeHtml(c))}</td>`).join("")}</tr>`).join("") + "</tbody>";
+    }
+    html += "</table></div>";
+    out.push(html);
+    i = j;
+  }
+
+  return out.join("\n");
+}
+
 function resolveMediaUrl(raw){
   const value=String(raw||"").trim();
   if(!value) return "";
@@ -73,6 +148,7 @@ function resolveMediaUrl(raw){
 function sanitizeRichText(value) {
   if (value == null || value === "") return "";
   let src = decodeHtmlEntities(value).replace(/\r\n?/g, "\n");
+  src = pipeRowsToHtml(src);
   src = markdownToRichHtml(src);
   const box = document.createElement("div");
   if (/<\s*(?:b|strong|i|em|u|br|p|div|span|img)\b/i.test(src)) box.innerHTML = src;
@@ -134,10 +210,13 @@ function sanitizeRichText(value) {
 
   box.querySelectorAll("*").forEach(el => {
     const tag = el.tagName.toLowerCase();
-    const allowed = new Set(["b","strong","i","em","u","br","p","div","span","img"]);
+    const allowed = new Set(["b","strong","i","em","u","br","p","div","span","img","table","thead","tbody","tr","th","td"]);
     if (!allowed.has(tag)) { el.replaceWith(...Array.from(el.childNodes)); return; }
     if (tag === "img") return;
+    const keepTableClass = (tag === "div" && el.classList.contains("rich-table-wrap")) || (tag === "table" && el.classList.contains("rich-auto-table"));
+    const keepClass = keepTableClass ? el.className : "";
     for (const attr of Array.from(el.attributes)) el.removeAttribute(attr.name);
+    if (keepClass) el.setAttribute("class", keepClass);
     if (tag === "strong") { const b = document.createElement("b"); while (el.firstChild) b.appendChild(el.firstChild); el.replaceWith(b); }
     else if (tag === "em") { const i = document.createElement("i"); while (el.firstChild) i.appendChild(el.firstChild); el.replaceWith(i); }
   });
