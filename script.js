@@ -81,6 +81,20 @@ function ensureAutoPipeTableStyles() {
   document.head.appendChild(style);
 }
 
+function ensureVocabularyCardStyles(){
+  if(document.getElementById("doraemon-vocabulary-card-styles")) return;
+  const style=document.createElement("style"); style.id="doraemon-vocabulary-card-styles";
+  style.textContent=`
+    .daily-vocabulary-card{margin:8px 0 4px;padding:18px;border:1px solid #d8e2ef;border-radius:16px;background:linear-gradient(180deg,#ffffff,#f8fbff);box-shadow:0 8px 24px rgba(15,23,42,.06)}
+    .daily-vocabulary-progress{font-size:12px;font-weight:800;color:#4f46e5;margin-bottom:10px}
+    .daily-vocabulary-word{font-size:28px;font-weight:900;color:#0f172a;line-height:1.15;margin-bottom:10px;overflow-wrap:anywhere}
+    .daily-vocabulary-field{font-size:14px;line-height:1.65;color:#334155;margin:7px 0}
+    .daily-vocabulary-example{padding:10px 12px;border-left:3px solid #7c9cff;background:#f8fbff;border-radius:8px}
+    .daily-vocabulary-image{display:block;width:100%;max-height:300px;object-fit:contain;margin:14px 0 2px;border-radius:12px;border:1px solid #e2e8f0;background:#fff}
+    @media(max-width:700px){.daily-vocabulary-card{padding:14px}.daily-vocabulary-word{font-size:24px}}
+  `; document.head.appendChild(style);
+}
+
 function ensureLibraryFilterStyles(){
   if(document.getElementById("doraemon-library-filter-styles")) return;
   const style=document.createElement("style");
@@ -150,6 +164,7 @@ function pipeRowsToHtml(value) {
     const normalizeCells = cells => Array.from({length:columnCount}, (_, idx) => String(cells[idx] ?? ""));
 
     ensureAutoPipeTableStyles();
+    ensureVocabularyCardStyles();
     let html = '<div class="rich-table-wrap"><table class="rich-auto-table">';
     if (hasMarkdownHeader && dataRows.length >= 1) {
       html += "<thead><tr>" + normalizeCells(dataRows[0].cells).map(c => `<th>${markdownToRichHtml(escapeHtml(c))}</th>`).join("") + "</tr></thead>";
@@ -475,6 +490,17 @@ function renderBlock(block) {
       <div class="daily-collocation-field"><strong>Ví dụ:</strong> ${escapeHtml(x.example||"")}</div>
       ${image?`<img class="daily-collocation-image" src="${escapeHtml(image)}" alt="Ảnh minh họa cho ví dụ" loading="eager" onerror="this.classList.add('image-error')">`:""}
       <div class="daily-collocation-footer"><span>🌟 Ghi nhớ mẫu này nhé! Cậu có thể hỏi thêm về cách dùng hoặc đổi sang mục khác.</span><button type="button" class="${shuffleClass}" data-feature-kind="${isPhrasal ? "phrasal_verb" : "collocation"}" data-message-index="${Number(block.messageIndex ?? -1)}" ${idAttr}="${Number(x.id||0)}" title="Xem ${isPhrasal ? "Phrasal verb" : "Collocation"} khác">🔀</button></div>
+    </div>`;
+  }
+  if (type === "vocabulary_item") {
+    const x=block.vocabulary||{}; const image=x.image_url||""; const pronunciationLabel=x.is_english===false?"Cách đọc":"Phiên âm";
+    return `<div class="daily-vocabulary-card">
+      <div class="daily-vocabulary-progress">📚 Từ vựng ${Number(x.index||0)+1}/${Number(x.total||1)}</div>
+      <div class="daily-vocabulary-word">${escapeHtml(x.writing||"")}</div>
+      ${x.pronunciation?`<div class="daily-vocabulary-field"><strong>${pronunciationLabel}:</strong> ${escapeHtml(x.pronunciation)}</div>`:""}
+      ${x.meaning?`<div class="daily-vocabulary-field"><strong>Nghĩa:</strong> ${escapeHtml(x.meaning)}</div>`:""}
+      ${x.example?`<div class="daily-vocabulary-field daily-vocabulary-example"><strong>Ví dụ:</strong> ${escapeHtml(x.example)}</div>`:""}
+      ${image?`<img class="daily-vocabulary-image" src="${escapeHtml(image)}" alt="Ảnh minh hoạ cho ${escapeHtml(x.writing||'Từ vựng')}" loading="eager" onerror="this.classList.add('image-error')">`:""}
     </div>`;
   }
   if (type === "choice") {
