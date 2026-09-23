@@ -23,6 +23,8 @@ const state = {
   activeFeature: "",
   activeFeatureItem: null,
   freeChatTutor: false,
+  phrasingTask: "",
+  phrasingContext: [],
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -75,6 +77,47 @@ function ensureAutoPipeTableStyles() {
     .rich-auto-table td{background:#fff;color:#334155}
     .rich-auto-table tr:nth-child(even) td{background:#fbfdff}
     @media(max-width:700px){.rich-table-wrap{margin-left:-2px;margin-right:-2px;width:calc(100% + 4px)}.rich-auto-table{min-width:460px;font-size:12px}.rich-auto-table td,.rich-auto-table th{padding:8px}}
+  `;
+  document.head.appendChild(style);
+}
+
+function ensureVocabularyCardStyles(){
+  if(document.getElementById("doraemon-vocabulary-card-styles")) return;
+  const style=document.createElement("style"); style.id="doraemon-vocabulary-card-styles";
+  style.textContent=`
+    .daily-vocabulary-card{margin:8px 0 4px;padding:18px;border:1px solid #d8e2ef;border-radius:16px;background:linear-gradient(180deg,#ffffff,#f8fbff);box-shadow:0 8px 24px rgba(15,23,42,.06)}
+    .daily-vocabulary-progress{font-size:12px;font-weight:800;color:#4f46e5;margin-bottom:10px}
+    .daily-vocabulary-word{font-size:28px;font-weight:700;color:#0f172a;line-height:1.15;margin-bottom:10px;overflow-wrap:anywhere}
+    .daily-vocabulary-field{font-size:14px;line-height:1.65;color:#334155;margin:7px 0}
+    .daily-vocabulary-example{padding:10px 12px;border-left:3px solid #7c9cff;background:#f8fbff;border-radius:8px}
+    .daily-vocabulary-image{display:block;width:100%;max-height:300px;object-fit:contain;margin:14px 0 2px;border-radius:12px;border:1px solid #e2e8f0;background:#fff}
+    @media(max-width:700px){.daily-vocabulary-card{padding:14px}.daily-vocabulary-word{font-size:24px}}
+  `; document.head.appendChild(style);
+}
+
+function ensureLibraryFilterStyles(){
+  if(document.getElementById("doraemon-library-filter-styles")) return;
+  const style=document.createElement("style");
+  style.id="doraemon-library-filter-styles";
+  style.textContent=`
+    .library-filters{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 14px;padding:10px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fbff}
+    .library-filter{display:flex;flex-direction:column;gap:4px;min-width:0}
+    .library-filter label{font-size:11px;font-weight:800;color:#64748b}
+    .library-filter-multi{position:relative;min-width:0}
+    .library-filter-trigger{width:100%;height:34px;display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #d8e2ef;border-radius:9px;background:#fff;padding:0 9px;color:#1e293b;font-size:12px;outline:none;cursor:pointer;text-align:left}
+    .library-filter-trigger:hover{border-color:#b9c9df}
+    .library-filter-multi.open .library-filter-trigger{border-color:#7c9cff;box-shadow:0 0 0 3px rgba(59,130,246,.08)}
+    .library-filter-chevron{font-size:10px;color:#64748b;transition:transform .15s ease}
+    .library-filter-multi.open .library-filter-chevron{transform:rotate(180deg)}
+    .library-filter-menu{position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:60;display:none;max-height:220px;overflow:auto;padding:5px;border:1px solid #d8e2ef;border-radius:10px;background:#fff;box-shadow:0 12px 26px rgba(15,23,42,.12)}
+    .library-filter-multi.open .library-filter-menu{display:block}
+    .library-filter-option{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:7px;font-size:12px;color:#334155;cursor:pointer;user-select:none}
+    .library-filter-option:hover{background:#f1f5ff}
+    .library-filter-option input{width:14px;height:14px;margin:0;accent-color:#3b82f6}
+    .library-filter-option.all-option{border-bottom:1px solid #eef2f7;margin-bottom:3px;padding-bottom:8px;font-weight:700}
+    .library-filter-count{font-size:10px;color:#64748b;margin-left:auto}
+    .library-filter-empty{padding:12px;border:1px dashed #cbd5e1;border-radius:10px;color:#64748b;font-size:12px;text-align:center;background:#fff}
+    @media(max-width:700px){.library-filters{grid-template-columns:1fr}}
   `;
   document.head.appendChild(style);
 }
@@ -448,6 +491,17 @@ function renderBlock(block) {
       <div class="daily-collocation-footer"><span>🌟 Ghi nhớ mẫu này nhé! Cậu có thể hỏi thêm về cách dùng hoặc đổi sang mục khác.</span><button type="button" class="${shuffleClass}" data-feature-kind="${isPhrasal ? "phrasal_verb" : "collocation"}" data-message-index="${Number(block.messageIndex ?? -1)}" ${idAttr}="${Number(x.id||0)}" title="Xem ${isPhrasal ? "Phrasal verb" : "Collocation"} khác">🔀</button></div>
     </div>`;
   }
+  if (type === "vocabulary_item") {
+    const x=block.vocabulary||{}; const image=x.image_url||""; const pronunciationLabel=x.is_english===false?"Cách đọc":"Phiên âm";
+    return `<div class="daily-vocabulary-card">
+      <div class="daily-vocabulary-progress">📚 ${Number(x.index||0)+1}/${Number(x.total||1)}</div>
+      <div class="daily-vocabulary-word"><strong>Từ vựng:</strong> ${escapeHtml(x.writing||"")}</div>
+      ${x.pronunciation?`<div class="daily-vocabulary-field"><strong>${pronunciationLabel}:</strong> ${escapeHtml(x.pronunciation)}</div>`:""}
+      ${x.meaning?`<div class="daily-vocabulary-field"><strong>Nghĩa:</strong> ${escapeHtml(x.meaning)}</div>`:""}
+      ${x.example?`<div class="daily-vocabulary-field daily-vocabulary-example"><strong>Ví dụ:</strong> ${escapeHtml(x.example)}</div>`:""}
+      ${image?`<img class="daily-vocabulary-image" src="${escapeHtml(resolveMediaUrl(image))}" alt="Ảnh minh hoạ cho ${escapeHtml(x.writing||'Từ vựng')}" loading="eager" onerror="this.classList.add('image-error')">`:""}
+    </div>`;
+  }
   if (type === "choice") {
     const options = Array.isArray(block.options) ? block.options : [];
     return `<div class="choice-row">${options.map((o,i)=>`<button class="chat-choice ${i===0?"primary":""}" data-action="${escapeHtml(o.action || "")}" data-label="${escapeHtml(o.label || "")}" data-display="${escapeHtml(o.display_label || o.label || "")}">${escapeHtml(o.label || "Lựa chọn")}</button>`).join("")}</div>`;
@@ -621,7 +675,7 @@ async function startWelcome() {
 async function renderChat(el) {
   el.innerHTML = `<div class="study-grid">
     <aside class="study-library page-card"><div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">Đang học</span></div><button class="tutor-launch-card" id="freeTutorBtn"><span class="tutor-launch-avatar" aria-hidden="true"><img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy"></span><span class="tutor-launch-copy"><strong>Trò chuyện cùng gia sư</strong><small>Doraemon sẽ đồng hành và giúp cậu cải thiện những điểm còn yếu.</small></span><span class="tutor-launch-arrow">→</span></button><div class="loading">Đang tải nội dung…</div><div class="library-note">💡 Chọn bài để Doraemon mở đúng ngữ cảnh học. Trạng thái chi tiết của Giáo trình nằm trong menu <b>Thông tin người học → Giáo trình</b>.</div></aside>
-    <section class="chat-panel page-card"><div class="chat-toolbar"><div class="chat-toolbar-copy"><span class="section-label">PHIÊN HỌC</span><strong>Học cùng Doraemon</strong><small>Doraemon hướng dẫn, giải thích, đặt câu hỏi và phản hồi ngay trong cùng một phòng học.</small></div><div class="chat-toolbar-actions"><button class="feature-launch-button" id="collocationBtn">Collocation</button><button class="feature-launch-button" id="phrasalVerbBtn">Phrasal verb</button><button class="small-button" id="newChatBtn">＋ Phiên mới</button></div></div><div class="chat-messages" id="chatMessages"></div><div class="chat-composer"><textarea id="chatInput" rows="1" placeholder="Hỏi Doraemon hoặc trả lời câu hỏi…"></textarea><button class="send-button" id="sendBtn" aria-label="Gửi tin nhắn">➤</button></div><div class="composer-hint">Enter để gửi · Shift+Enter để xuống dòng · Có thể dán ảnh bài tập vào ô chat</div></section>
+    <section class="chat-panel page-card"><div class="chat-toolbar"><div class="chat-toolbar-copy"><span class="section-label">PHIÊN HỌC</span><strong>Học cùng Doraemon</strong><small>Doraemon hướng dẫn, giải thích, đặt câu hỏi và phản hồi ngay trong cùng một phòng học.</small></div><div class="chat-toolbar-actions"><button class="feature-launch-button" id="collocationBtn">Collocation</button><button class="feature-launch-button" id="phrasalVerbBtn">Phrasal verb</button><button class="feature-launch-button" id="phrasingBtn">Phrasing</button><button class="small-button" id="newChatBtn">＋ Phiên mới</button></div></div><div class="chat-messages" id="chatMessages"></div><div class="chat-composer"><textarea id="chatInput" rows="1" placeholder="Hỏi Doraemon hoặc trả lời câu hỏi…"></textarea><button class="send-button" id="sendBtn" aria-label="Gửi tin nhắn">➤</button></div><div class="composer-hint">Enter để gửi · Shift+Enter để xuống dòng · Có thể dán ảnh bài tập vào ô chat</div></section>
   </div>`;
   try {
     const [catalog, summary] = await Promise.all([
@@ -649,22 +703,35 @@ async function renderChat(el) {
       if(["in_progress","active","review","needs_review"].includes(st)) return {label:"Đang học dở ↻",cls:"in-progress"};
       return {label:"Chưa học",cls:"not-started"};
     };
-    const types=["Giáo trình","Từ vựng","Ngữ pháp","Bài tập","Truyện đọc",...Object.keys(grouped).filter(x=>!["Giáo trình","Từ vựng","Ngữ pháp","Bài tập","Truyện đọc"].includes(x))];
-    const sections=types.filter(t=>grouped[t]?.length).map(t=>`<div class="lesson-section"><div class="lesson-section-head"><span>${iconType(t)} ${escapeHtml(t)}</span><small>${new Set(grouped[t].map(x=>`${x.lesson}|${x.topic||""}`)).size} bài</small></div>${uniqRows(grouped[t]).slice(0,14).map(r=>{
+    const typeOrder=["Giáo trình","Từ vựng","Ngữ pháp","Bài tập","Luyện viết","Truyện đọc"];
+    const types=[...typeOrder.filter(t=>grouped[t]?.length),...Object.keys(grouped).filter(x=>!typeOrder.includes(x))];
+    const cardRows=[];
+    const sections=types.filter(t=>grouped[t]?.length).map(t=>`<div class="lesson-section" data-section-type="${escapeHtml(t)}"><div class="lesson-section-head"><span>${iconType(t)} ${escapeHtml(t)}</span><small class="lesson-section-count">${new Set(grouped[t].map(x=>`${x.lesson}|${x.topic||""}`)).size} bài</small></div>${uniqRows(grouped[t]).slice(0,30).map(r=>{
       const actualType=String(r.content_type||t).trim();
       const key=`${r.course_id!=null?String(r.course_id):""}|${actualType.toLocaleLowerCase("vi-VN")}|${String(r.lesson||"").trim().toLocaleLowerCase("vi-VN")}|${String(r.topic||"").trim().toLocaleLowerCase("vi-VN")}`;
       const st=lessonStatus(progressMap.get(key));
+      cardRows.push({type:actualType,status:st.cls});
       const locked=Boolean(r.locked);
-      return `<button class="lesson-card compact ${locked?'locked':''}" data-lesson="${escapeHtml(r.lesson)}" data-type="${escapeHtml(actualType)}" data-topic="${escapeHtml(r.topic||"")}" data-locked="${locked?'1':'0'}" ${locked?'aria-disabled="true"':''} style="${locked?'opacity:.58;cursor:not-allowed;':''}"><div class="lesson-card-copy"><strong>${escapeHtml(r.lesson)}</strong>${r.topic?`<small>${escapeHtml(r.topic)}</small>`:""}</div><span class="lesson-status-tag ${locked?'not-started':st.cls}">${locked?'🔒 Đã khóa':st.label}</span><span class="lesson-card-open">${locked?'🔒':'Học →'}</span></button>`;
+      return `<button class="lesson-card compact ${locked?'locked':''}" data-lesson="${escapeHtml(r.lesson)}" data-type="${escapeHtml(actualType)}" data-topic="${escapeHtml(r.topic||"")}" data-status="${escapeHtml(st.cls)}" data-locked="${locked?'1':'0'}" ${locked?'aria-disabled="true"':''} style="${locked?'opacity:.58;cursor:not-allowed;':''}"><div class="lesson-card-copy"><strong>${escapeHtml(r.lesson)}</strong>${r.topic?`<small>${escapeHtml(r.topic)}</small>`:""}</div><span class="lesson-status-tag ${locked?'not-started':st.cls}">${locked?'🔒 Đã khóa':st.label}</span><span class="lesson-card-open">${locked?'🔒':'Học →'}</span></button>`;
     }).join("")}</div>`).join("");
-    $(".study-library").innerHTML = `<div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">${docs.length} mục</span></div><button class="tutor-launch-card" id="freeTutorBtn"><span class="tutor-launch-avatar" aria-hidden="true"><img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy"></span><span class="tutor-launch-copy"><strong>Trò chuyện cùng gia sư</strong><small>Doraemon sẽ đồng hành và giúp cậu cải thiện những điểm còn yếu.</small></span><span class="tutor-launch-arrow">→</span></button>${sections || `<div class="empty-state">Chưa có nội dung được cấp quyền.</div>`}<div class="library-note">💡 Chọn bài để Doraemon mở đúng ngữ cảnh học. Tag trạng thái được lấy từ tiến độ học của tài khoản.</div>`;
+    ensureLibraryFilterStyles();
+    const typeFilterOptions=types.map(t=>`<label class="library-filter-option"><input type="checkbox" value="${escapeHtml(t)}"> <span>${escapeHtml(t)}</span></label>`).join("");
+    const statusOptions=[
+      ["not-started","Chưa học"],
+      ["in-progress","Đang học dở"],
+      ["completed","Đã học"]
+    ].map(([value,label])=>`<label class="library-filter-option"><input type="checkbox" value="${escapeHtml(value)}"> <span>${escapeHtml(label)}</span></label>`).join("");
+    const makeMultiFilter=(id,label,allLabel,options)=>`<div class="library-filter"><label>${escapeHtml(label)}</label><div class="library-filter-multi" id="${id}" data-filter-key="${id.includes("Type")?"type":"status"}"><button type="button" class="library-filter-trigger" aria-haspopup="listbox" aria-expanded="false"><span class="library-filter-label">Tất cả</span><span class="library-filter-chevron">▾</span></button><div class="library-filter-menu" role="listbox"><label class="library-filter-option all-option"><input type="checkbox" value="" checked> <span>${escapeHtml(allLabel)}</span></label>${options}</div></div></div>`;
+    const libraryHtml = `<div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">${docs.length} mục</span></div><button class="tutor-launch-card" id="freeTutorBtn"><span class="tutor-launch-avatar" aria-hidden="true"><img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy"></span><span class="tutor-launch-copy"><strong>Trò chuyện cùng gia sư</strong><small>Doraemon sẽ đồng hành và giúp cậu cải thiện những điểm còn yếu.</small></span><span class="tutor-launch-arrow">→</span></button><div class="library-filters">${makeMultiFilter("libraryTypeFilter","Loại nội dung","Tất cả loại nội dung",typeFilterOptions)}${makeMultiFilter("libraryStatusFilter","Trạng thái học","Tất cả trạng thái",statusOptions)}</div>${sections || `<div class="empty-state">Chưa có nội dung được cấp quyền.</div>`}<div id="libraryFilterEmpty" class="library-filter-empty" style="display:none">Không có bài nào khớp với bộ lọc hiện tại.</div><div class="library-note">💡 Chọn bài để Doraemon mở đúng ngữ cảnh học. Dùng bộ lọc phía trên để tìm nhanh theo loại nội dung hoặc trạng thái học.</div>`;
+    $(".study-library").innerHTML=libraryHtml;
   } catch (e) {
     $(".study-library").innerHTML = `<div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div></div><div class="empty-state error">${escapeHtml(e.message)}</div>`;
   }
   renderMessages();
   $("#collocationBtn").onclick = () => showLearningFeature("collocation");
   $("#phrasalVerbBtn").onclick = () => showLearningFeature("phrasal_verb");
-  $("#newChatBtn").onclick = () => { state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`; state.chatboxNew=true; state.messages=[]; state.chatHistory=[]; state.activeContentType=""; state.activeLesson=""; state.activeFeature=""; state.activeFeatureItem=null; state.freeChatTutor=false; startWelcome(); };
+  $("#phrasingBtn").onclick = () => launchPhrasing();
+  $("#newChatBtn").onclick = () => { state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`; state.chatboxNew=true; state.messages=[]; state.chatHistory=[]; state.activeContentType=""; state.activeLesson=""; state.activeFeature=""; state.activeFeatureItem=null; state.freeChatTutor=false; state.phrasingTask=""; state.phrasingContext=[]; startWelcome(); };
   const launchTutor = async () => {
     state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;
     state.chatboxNew=true; state.messages=[]; state.chatHistory=[];
@@ -673,7 +740,74 @@ async function renderChat(el) {
     await sendChat("Bắt đầu một phiên Free Chat Tutor. Hãy chủ động bắt chuyện với mình.", null, false, null, null);
   };
   $("#freeTutorBtn").onclick = launchTutor;
-  const input=$("#chatInput"); const send=()=>{const v=input.value.trim(); if(!v)return; input.value=""; autoGrow(input); sendChat(v);}; $("#sendBtn").onclick=send; input.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();} }); input.addEventListener("input",()=>autoGrow(input));
+  const typeFilter=$("#libraryTypeFilter"), statusFilter=$("#libraryStatusFilter"), filterEmpty=$("#libraryFilterEmpty");
+  const getCheckedValues=(control)=>new Set($$("input[type=checkbox]:checked",control).map(x=>String(x.value||"")).filter(Boolean));
+  const updateMultiFilterLabel=(control)=>{
+    if(!control) return;
+    const checked=[...$$('input[type="checkbox"]',control)].filter(x=>x.checked && x.value);
+    const label=control.querySelector(".library-filter-label");
+    if(label) label.textContent=checked.length===0?"Tất cả":checked.length===1?checked[0].parentElement?.querySelector("span")?.textContent||"1 đã chọn":`${checked.length} đã chọn`;
+    const all=control.querySelector('input[type="checkbox"][value=""]');
+    if(all) all.checked=checked.length===0;
+  };
+  const setupMultiFilter=(control)=>{
+    if(!control) return;
+    const trigger=control.querySelector(".library-filter-trigger");
+    const all=control.querySelector('input[type="checkbox"][value=""]');
+    const options=$$(".library-filter-menu input[type=checkbox]",control);
+    trigger?.addEventListener("click",e=>{
+      e.stopPropagation();
+      const isOpen=control.classList.toggle("open");
+      trigger.setAttribute("aria-expanded",isOpen?"true":"false");
+      $$(".library-filter-multi.open").forEach(other=>{if(other!==control){other.classList.remove("open");other.querySelector(".library-filter-trigger")?.setAttribute("aria-expanded","false");}});
+    });
+    all?.addEventListener("change",()=>{
+      if(all.checked) options.forEach(x=>{if(x!==all)x.checked=false;});
+      updateMultiFilterLabel(control);
+      applyLibraryFilters();
+    });
+    options.filter(x=>x!==all).forEach(x=>x.addEventListener("change",()=>{
+      if(x.checked && all) all.checked=false;
+      updateMultiFilterLabel(control);
+      applyLibraryFilters();
+    }));
+    updateMultiFilterLabel(control);
+  };
+  setupMultiFilter(typeFilter);
+  setupMultiFilter(statusFilter);
+  const closeLibraryFilters=(e)=>{
+    if(e.target.closest(".library-filter-multi")) return;
+    $$(".library-filter-multi.open").forEach(control=>{
+      control.classList.remove("open");
+      control.querySelector(".library-filter-trigger")?.setAttribute("aria-expanded","false");
+    });
+  };
+  if(window.__doraemonLibraryFilterOutsideHandler) document.removeEventListener("click",window.__doraemonLibraryFilterOutsideHandler);
+  window.__doraemonLibraryFilterOutsideHandler=closeLibraryFilters;
+  document.addEventListener("click",closeLibraryFilters);
+  const applyLibraryFilters=()=>{
+    const typesSelected=getCheckedValues(typeFilter);
+    const statusesSelected=getCheckedValues(statusFilter);
+    let visibleCount=0;
+    $$(".lesson-section",$(".study-library")).forEach(section=>{
+      let sectionVisible=0;
+      $$(".lesson-card.compact",section).forEach(card=>{
+        const type=String(card.dataset.type||"");
+        const status=String(card.dataset.status||"");
+        const typeOk=!typesSelected.size || typesSelected.has(type);
+        const statusOk=!statusesSelected.size || statusesSelected.has(status);
+        const show=typeOk&&statusOk;
+        card.style.display=show?"":"none";
+        if(show){sectionVisible++;visibleCount++;}
+      });
+      section.style.display=sectionVisible?"":"none";
+      const count=section.querySelector(".lesson-section-count");
+      if(count) count.textContent=`${sectionVisible} bài`;
+    });
+    if(filterEmpty) filterEmpty.style.display=visibleCount?"none":"";
+  };
+  applyLibraryFilters();
+  const input=$("#chatInput"); const send=()=>{const v=input.value.trim(); if(!v)return; input.value=""; autoGrow(input); if(state.activeFeature==="phrasing" && state.phrasingTask){ sendPhrasingAnswer(v); return; } sendChat(v);}; $("#sendBtn").onclick=send; input.addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();} }); input.addEventListener("input",()=>autoGrow(input));
   $$(".lesson-card", el).forEach(x=>x.onclick=()=>{if(x.dataset.locked==="1"){toast("🔒 Bài này đang bị khóa trong gói Free.","error");return;} startLesson(x.dataset.lesson,x.dataset.type,x.dataset.topic||"");});
   if (!state.messages.length && !state.activeFeature) await startWelcome();
 }
