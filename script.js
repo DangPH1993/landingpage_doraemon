@@ -1,4 +1,4 @@
-// Doraemon Web Client v31.59 – fixed independent scrolling + fixed chat height
+// Doraemon Web Client v31.60 – hide landing nav in learning screen; study logo returns to landing
 const API_BASE = (() => {
   const meta = document.querySelector('meta[name="doraemon-api-base"]');
   const configured = (window.DORAEMON_API_BASE || meta?.content || '').trim();
@@ -94,6 +94,18 @@ function ensureVocabularyCardStyles(){
     .daily-vocabulary-image{display:block;width:100%;max-height:300px;object-fit:contain;margin:14px 0 2px;border-radius:12px;border:1px solid #e2e8f0;background:#fff}
     @media(max-width:700px){.daily-vocabulary-card{padding:14px}.daily-vocabulary-word{font-size:24px}}
   `; document.head.appendChild(style);
+}
+
+function ensureAppNavigationStyles(){
+  if(document.getElementById("doraemon-app-navigation-styles")) return;
+  const style=document.createElement("style");
+  style.id="doraemon-app-navigation-styles";
+  style.textContent=`
+    /* Landing-page navigation belongs only to the landing page.
+       The learning screen has its own study header, so hide the global nav while #/app is active. */
+    #siteNav.app-mode{display:none !important;}
+  `;
+  document.head.appendChild(style);
 }
 
 function ensureStudyChatLayoutStyles(){
@@ -445,6 +457,7 @@ function renderLanding() {
 function renderAppShell() {
   landingView.classList.add("hidden");
   appView.classList.remove("hidden");
+  ensureAppNavigationStyles();
   $("#siteNav").classList.add("app-mode");
   const userName = escapeHtml(state.profile?.nickname || "bạn");
   const initial = escapeHtml((state.profile?.nickname || "D").slice(0,1).toUpperCase());
@@ -453,7 +466,7 @@ function renderAppShell() {
   appView.innerHTML = `
     <div class="study-shell">
       <header class="study-topbar">
-        <a href="#/app" class="study-brand"><div class="logo-icon">D</div><div><strong>Doraemon</strong><span>Gia sư đồng hành cùng bạn</span></div></a>
+        <a href="#" class="study-brand" aria-label="Về trang chủ Doraemon"><div class="logo-icon">D</div><div><strong>Doraemon</strong><span>Gia sư đồng hành cùng bạn</span></div></a>
         <div class="study-course-picker">
           <span>Đang học</span>
           <select id="courseSelect"><option value="">${courseName}</option>${state.courses.map(c => `<option value="${escapeHtml(c.course_id)}" ${String(c.course_id)===String(state.selectedCourseId)?"selected":""}>${escapeHtml(c.name)}</option>`).join("")}</select>
