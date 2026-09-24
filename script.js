@@ -1,4 +1,4 @@
-// Doraemon Web Client v31.60 – hide landing nav in learning screen; study logo returns to landing
+// Doraemon Web Client v31.61 – taller learning area (1.5x desktop)
 const API_BASE = (() => {
   const meta = document.querySelector('meta[name="doraemon-api-base"]');
   const configured = (window.DORAEMON_API_BASE || meta?.content || '').trim();
@@ -116,11 +116,12 @@ function ensureStudyChatLayoutStyles(){
     /* Keep the two-column study area inside the viewport.
        The left curriculum list and chat messages scroll independently. */
     .study-grid{
-      height:calc(100vh - 132px);
-      height:calc(100dvh - 132px);
-      min-height:560px;
-      max-height:calc(100vh - 132px);
-      max-height:calc(100dvh - 132px);
+      /* Desktop learning area is intentionally 1.5x the previous viewport-based height.
+         Each column still scrolls internally, so long lesson lists do not stretch the chat. */
+      height:calc(150vh - 198px);
+      height:calc(150dvh - 198px);
+      min-height:840px;
+      max-height:none;
       align-items:stretch !important;
       min-width:0;
     }
