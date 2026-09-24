@@ -1,3 +1,4 @@
+// Doraemon Web Client v31.59 – fixed independent scrolling + fixed chat height
 const API_BASE = (() => {
   const meta = document.querySelector('meta[name="doraemon-api-base"]');
   const configured = (window.DORAEMON_API_BASE || meta?.content || '').trim();
@@ -93,6 +94,76 @@ function ensureVocabularyCardStyles(){
     .daily-vocabulary-image{display:block;width:100%;max-height:300px;object-fit:contain;margin:14px 0 2px;border-radius:12px;border:1px solid #e2e8f0;background:#fff}
     @media(max-width:700px){.daily-vocabulary-card{padding:14px}.daily-vocabulary-word{font-size:24px}}
   `; document.head.appendChild(style);
+}
+
+function ensureStudyChatLayoutStyles(){
+  if(document.getElementById("doraemon-study-chat-layout-styles")) return;
+  const style=document.createElement("style");
+  style.id="doraemon-study-chat-layout-styles";
+  style.textContent=`
+    /* Keep the two-column study area inside the viewport.
+       The left curriculum list and chat messages scroll independently. */
+    .study-grid{
+      height:calc(100vh - 132px);
+      height:calc(100dvh - 132px);
+      min-height:560px;
+      max-height:calc(100vh - 132px);
+      max-height:calc(100dvh - 132px);
+      align-items:stretch !important;
+      min-width:0;
+    }
+    .study-library{
+      height:100% !important;
+      min-height:0 !important;
+      max-height:100% !important;
+      display:flex !important;
+      flex-direction:column !important;
+      overflow:hidden !important;
+      min-width:0;
+    }
+    .study-library-head,.tutor-launch-card,.library-filters,.library-note{
+      flex:0 0 auto;
+    }
+    .study-library-list{
+      flex:1 1 auto;
+      min-height:0 !important;
+      overflow-y:auto !important;
+      overflow-x:hidden !important;
+      padding:2px 6px 6px 0;
+      scrollbar-width:thin;
+      overscroll-behavior:contain;
+    }
+    .study-library-list::-webkit-scrollbar,.chat-messages::-webkit-scrollbar{width:8px}
+    .study-library-list::-webkit-scrollbar-thumb,.chat-messages::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:999px}
+    .study-library-list::-webkit-scrollbar-track,.chat-messages::-webkit-scrollbar-track{background:transparent}
+    .chat-panel{
+      height:100% !important;
+      min-height:0 !important;
+      max-height:100% !important;
+      display:flex !important;
+      flex-direction:column !important;
+      overflow:hidden !important;
+      min-width:0;
+    }
+    .chat-toolbar{flex:0 0 auto}
+    .chat-messages{
+      flex:1 1 auto !important;
+      min-height:0 !important;
+      max-height:none !important;
+      height:auto !important;
+      overflow-y:auto !important;
+      overflow-x:hidden !important;
+      overscroll-behavior:contain;
+    }
+    .chat-composer,.composer-hint{flex:0 0 auto}
+    @media(max-width:900px){
+      .study-grid{height:auto;min-height:0;max-height:none}
+      .study-library,.chat-panel{height:auto !important;max-height:none !important}
+      .study-library-list{max-height:52vh;min-height:220px !important}
+      .chat-panel{min-height:620px !important}
+    }
+  `;
+  document.head.appendChild(style);
 }
 
 function ensureLibraryFilterStyles(){
@@ -673,8 +744,9 @@ async function startWelcome() {
 }
 
 async function renderChat(el) {
+  ensureStudyChatLayoutStyles();
   el.innerHTML = `<div class="study-grid">
-    <aside class="study-library page-card"><div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">Đang học</span></div><button class="tutor-launch-card" id="freeTutorBtn"><span class="tutor-launch-avatar" aria-hidden="true"><img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy"></span><span class="tutor-launch-copy"><strong>Trò chuyện cùng gia sư</strong><small>Doraemon sẽ đồng hành và giúp cậu cải thiện những điểm còn yếu.</small></span><span class="tutor-launch-arrow">→</span></button><div class="loading">Đang tải nội dung…</div><div class="library-note">💡 Chọn bài để Doraemon mở đúng ngữ cảnh học. Trạng thái chi tiết của Giáo trình nằm trong menu <b>Thông tin người học → Giáo trình</b>.</div></aside>
+    <aside class="study-library page-card"><div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">Đang học</span></div><button class="tutor-launch-card" id="freeTutorBtn"><span class="tutor-launch-avatar" aria-hidden="true"><img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy"></span><span class="tutor-launch-copy"><strong>Trò chuyện cùng gia sư</strong><small>Doraemon sẽ đồng hành và giúp cậu cải thiện những điểm còn yếu.</small></span><span class="tutor-launch-arrow">→</span></button><div class="study-library-list"><div class="loading">Đang tải nội dung…</div></div><div class="library-note">💡 Chọn bài để Doraemon mở đúng ngữ cảnh học. Trạng thái chi tiết của Giáo trình nằm trong menu <b>Thông tin người học → Giáo trình</b>.</div></aside>
     <section class="chat-panel page-card"><div class="chat-toolbar"><div class="chat-toolbar-copy"><span class="section-label">PHIÊN HỌC</span><strong>Học cùng Doraemon</strong><small>Doraemon hướng dẫn, giải thích, đặt câu hỏi và phản hồi ngay trong cùng một phòng học.</small></div><div class="chat-toolbar-actions"><button class="feature-launch-button" id="collocationBtn">Collocation</button><button class="feature-launch-button" id="phrasalVerbBtn">Phrasal verb</button><button class="feature-launch-button" id="phrasingBtn">Phrasing</button><button class="small-button" id="newChatBtn">＋ Phiên mới</button></div></div><div class="chat-messages" id="chatMessages"></div><div class="chat-composer"><textarea id="chatInput" rows="1" placeholder="Hỏi Doraemon hoặc trả lời câu hỏi…"></textarea><button class="send-button" id="sendBtn" aria-label="Gửi tin nhắn">➤</button></div><div class="composer-hint">Enter để gửi · Shift+Enter để xuống dòng · Có thể dán ảnh bài tập vào ô chat</div></section>
   </div>`;
   try {
@@ -722,10 +794,10 @@ async function renderChat(el) {
       ["completed","Đã học"]
     ].map(([value,label])=>`<label class="library-filter-option"><input type="checkbox" value="${escapeHtml(value)}"> <span>${escapeHtml(label)}</span></label>`).join("");
     const makeMultiFilter=(id,label,allLabel,options)=>`<div class="library-filter"><label>${escapeHtml(label)}</label><div class="library-filter-multi" id="${id}" data-filter-key="${id.includes("Type")?"type":"status"}"><button type="button" class="library-filter-trigger" aria-haspopup="listbox" aria-expanded="false"><span class="library-filter-label">Tất cả</span><span class="library-filter-chevron">▾</span></button><div class="library-filter-menu" role="listbox"><label class="library-filter-option all-option"><input type="checkbox" value="" checked> <span>${escapeHtml(allLabel)}</span></label>${options}</div></div></div>`;
-    const libraryHtml = `<div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">${docs.length} mục</span></div><button class="tutor-launch-card" id="freeTutorBtn"><span class="tutor-launch-avatar" aria-hidden="true"><img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy"></span><span class="tutor-launch-copy"><strong>Trò chuyện cùng gia sư</strong><small>Doraemon sẽ đồng hành và giúp cậu cải thiện những điểm còn yếu.</small></span><span class="tutor-launch-arrow">→</span></button><div class="library-filters">${makeMultiFilter("libraryTypeFilter","Loại nội dung","Tất cả loại nội dung",typeFilterOptions)}${makeMultiFilter("libraryStatusFilter","Trạng thái học","Tất cả trạng thái",statusOptions)}</div>${sections || `<div class="empty-state">Chưa có nội dung được cấp quyền.</div>`}<div id="libraryFilterEmpty" class="library-filter-empty" style="display:none">Không có bài nào khớp với bộ lọc hiện tại.</div><div class="library-note">💡 Chọn bài để Doraemon mở đúng ngữ cảnh học. Dùng bộ lọc phía trên để tìm nhanh theo loại nội dung hoặc trạng thái học.</div>`;
+    const libraryHtml = `<div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">${docs.length} mục</span></div><button class="tutor-launch-card" id="freeTutorBtn"><span class="tutor-launch-avatar" aria-hidden="true"><img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy"></span><span class="tutor-launch-copy"><strong>Trò chuyện cùng gia sư</strong><small>Doraemon sẽ đồng hành và giúp cậu cải thiện những điểm còn yếu.</small></span><span class="tutor-launch-arrow">→</span></button><div class="library-filters">${makeMultiFilter("libraryTypeFilter","Loại nội dung","Tất cả loại nội dung",typeFilterOptions)}${makeMultiFilter("libraryStatusFilter","Trạng thái học","Tất cả trạng thái",statusOptions)}</div><div class="study-library-list">${sections || `<div class="empty-state">Chưa có nội dung được cấp quyền.</div>`}<div id="libraryFilterEmpty" class="library-filter-empty" style="display:none">Không có bài nào khớp với bộ lọc hiện tại.</div></div><div class="library-note">💡 Chọn bài để Doraemon mở đúng ngữ cảnh học. Dùng bộ lọc phía trên để tìm nhanh theo loại nội dung hoặc trạng thái học.</div>`;
     $(".study-library").innerHTML=libraryHtml;
   } catch (e) {
-    $(".study-library").innerHTML = `<div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div></div><div class="empty-state error">${escapeHtml(e.message)}</div>`;
+    $(".study-library").innerHTML = `<div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div></div><div class="study-library-list"><div class="empty-state error">${escapeHtml(e.message)}</div></div>`;
   }
   renderMessages();
   $("#collocationBtn").onclick = () => showLearningFeature("collocation");
