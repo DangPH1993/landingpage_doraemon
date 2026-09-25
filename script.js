@@ -758,7 +758,7 @@ function renderBlock(block) {
 function renderMessages() {
   const list = $("#chatMessages"); if (!list) return;
   list.innerHTML = state.messages.map((m, idx)=>`<div class="chat-row ${m.role==='user'?'user':'model'}"><div class="chat-avatar ${m.role==='model'?'chat-avatar-doraemon':''}">${m.role==='user'?'Bạn':'<img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy">'}</div><div class="chat-bubble"><div class="chat-role">${m.role==='user'?'Bạn':'Doraemon'}</div>${m.blocks.map(b=>renderBlock({...b,messageIndex:idx})).join("")}</div></div>`).join("");
-  $$(".chat-choice", list).forEach(btn => btn.addEventListener("click", () => { const action=btn.dataset.action; if(action==="phrasing_next"){ startNextPhrasing(); return; } sendAction(action, btn.dataset.display || btn.dataset.label); }));
+  $$(".chat-choice:not(.study-plan-lesson-button)", list).forEach(btn => btn.addEventListener("click", () => { const action=btn.dataset.action; if(action==="phrasing_next"){ startNextPhrasing(); return; } sendAction(action, btn.dataset.display || btn.dataset.label); }));
   $$(".study-plan-lesson-button", list).forEach(btn => btn.addEventListener("click", async () => {
     const lesson = String(btn.dataset.planLesson || "").trim();
     if (!lesson) return;
