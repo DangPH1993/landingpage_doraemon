@@ -369,15 +369,110 @@ function authHeaders(extra = {}) { return state.token ? { Authorization: `Bearer
 function route() { const raw = location.hash || "#"; return raw.startsWith("#/app") ? "app" : "landing"; }
 function routeView() { const raw = location.hash || ""; const q = raw.includes("?") ? new URLSearchParams(raw.split("?")[1]) : new URLSearchParams(); return q.get("view") || "chat"; }
 function toast(msg, type = "info") { const el = $("#toast"); el.textContent = msg; el.className = `toast ${type}`; clearTimeout(window.__toastTimer); window.__toastTimer = setTimeout(() => el.className = "toast hidden", 3200); }
-function openAuth(mode = "login") { authModal.classList.remove("hidden"); authModal.setAttribute("aria-hidden", "false"); setAuthMode(mode); setTimeout(() => $("#authPhone").focus(), 30); }
-function closeAuth() { authModal.classList.add("hidden"); authModal.setAttribute("aria-hidden", "true"); $("#authStatus").textContent = ""; }
+function setAuthFieldLabel(inputId, text) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const label = document.querySelector(`label[for="${inputId}"]`) || input.closest("label");
+  if (!label) return;
+  const span = label.querySelector("span") || label.querySelector("strong") || label.firstElementChild;
+  if (span && span !== input && !span.contains(input)) span.textContent = text;
+  else {
+    const node = [...label.childNodes].find(n => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
+    if (node) node.textContent = text + " ";
+  }
+}
+function ensureAuthExtras() {
+  if (!authForm) return;
+  if (!document.getElementById("forgotPasswordLink")) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "forgotPasswordLink";
+    btn.className = "auth-forgot-link";
+    btn.textContent = "Quên mật khẩu?";
+    btn.onclick = () => setAuthMode("forgot");
+    const submit = document.getElementById("authSubmit");
+    if (submit?.parentElement) submit.parentElement.insertAdjacentElement("afterend", btn);
+    else authForm.appendChild(btn);
+  }
+  if (!document.getElementById("authPasswordConfirmField")) {
+    const wrap = document.createElement("label");
+    wrap.id = "authPasswordConfirmField";
+    wrap.className = "auth-dynamic-field";
+    wrap.innerHTML = '<span>Nhập lại mật khẩu</span><input id="authPasswordConfirm" type="password" autocomplete="new-password" placeholder="Nhập lại mật khẩu">';
+    const pass = document.getElementById("authPassword");
+    const passWrap = pass?.closest("label") || pass?.parentElement;
+    if (passWrap?.parentElement) passWrap.parentElement.insertBefore(wrap, passWrap.nextSibling);
+    else authForm.appendChild(wrap);
+    const styleId = "doraemon-auth-extra-style";
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement("style");
+      style.id = styleId;
+      style.textContent = `.auth-forgot-link{display:block;margin:8px auto 0;background:none;border:0;color:#2563eb;font-weight:700;cursor:pointer}.auth-dynamic-field{display:block;margin-top:10px}.auth-dynamic-field span{display:block;margin-bottom:5px}.auth-dynamic-field input{width:100%;box-sizing:border-box}`;
+      document.head.appendChild(style);
+    }
+  }
+}
+function isResetPasswordRoute() { return (location.hash || "").startsWith("#/reset-password"); }
+function resetTokenFromHash() {
+  const raw = location.hash || "";
+  const idx = raw.indexOf("?");
+  if (idx < 0) return "";
+  return new URLSearchParams(raw.slice(idx + 1)).get("token") || "";
+}
+function openAuth(mode = "login") { ensureAuthExtras(); authModal.classList.remove("hidden"); authModal.setAttribute("aria-hidden", "false"); setAuthMode(mode); setTimeout(() => { const target = mode === "reset" ? $("#authPassword") : $("#authPhone"); target?.focus(); }, 30); }
+function closeAuth() { authModal.classList.add("hidden"); authModal.setAttribute("aria-hidden", "true"); const s = $("#authStatus"); if (s) s.textContent = ""; }
 function setAuthMode(mode) {
+  ensureAuthExtras();
   const register = mode === "register";
-  $$(".auth-tab").forEach(x => x.classList.toggle("active", x.dataset.authMode === mode));
-  $("#nicknameField").classList.toggle("hidden", !register);
-  $("#authNickname").required = register;
-  $("#authSubmit").textContent = register ? "Tạo tài khoản" : "Đăng nhập";
-  $("#authPassword").autocomplete = register ? "new-password" : "current-password";
+  const forgot = mode === "forgot";
+  const reset = mode === "reset";
+  $$(".auth-tab").forEach(x => x.classList.toggle("active", register ? x.dataset.authMode === "register" : (!forgot && !reset && x.dataset.authMode === "login")));
+  $$(".auth-tab").forEach(x => x.classList.toggle("hidden", forgot || reset));
+  const nickField = $("#nicknameField");
+  if (nickField) nickField.classList.toggle("hidden", !register);
+  const nick = $("#authNickname");
+  if (nick) nick.required = register;
+  const pass = $("#authPassword");
+  const passWrap = pass?.closest("label") || pass?.parentElement;
+  if (passWrap) passWrap.classList.toggle("hidden", forgot);
+  const confirmField = $("#authPasswordConfirmField");
+  if (confirmField) confirmField.classList.toggle("hidden", !reset);
+  if (pass) pass.required = register || reset;
+  const emailInput = $("#authPhone");
+  if (emailInput) {
+    emailInput.type = "email";
+    emailInput.name = "email";
+    emailInput.autocomplete = forgot ? "email" : (register ? "email" : "username");
+    emailInput.placeholder = "you@example.com";
+    emailInput.required = !reset;
+    const emailWrap = emailInput.closest("label") || emailInput.parentElement;
+    if (emailWrap) emailWrap.classList.toggle("hidden", reset);
+    setAuthFieldLabel("authPhone", "Email");
+  }
+  setAuthFieldLabel("authNickname", "Username");
+  if (forgot) {
+    if (pass) pass.value = "";
+    if (nick) nick.value = "";
+  }
+  if (reset) {
+    if (emailInput) emailInput.value = "";
+    if (nick) nick.value = "";
+    if (pass) { pass.value = ""; pass.placeholder = "Mật khẩu mới"; }
+    const c = $("#authPasswordConfirm"); if (c) c.value = "";
+    authForm.dataset.resetToken = resetTokenFromHash();
+  } else if (!register && pass) {
+    pass.placeholder = "Mật khẩu";
+  }
+  $("#authSubmit").textContent = register ? "Tạo tài khoản" : forgot ? "Gửi link đặt lại mật khẩu" : reset ? "Đặt lại mật khẩu" : "Đăng nhập";
+  $("#authPassword").autocomplete = register || reset ? "new-password" : "current-password";
+  const forgotLink = $("#forgotPasswordLink");
+  if (forgotLink) {
+    forgotLink.textContent = (forgot || reset) ? "Quay lại đăng nhập" : "Quên mật khẩu?";
+    forgotLink.onclick = () => { location.hash = "#"; setAuthMode("login"); openAuth("login"); };
+    forgotLink.classList.toggle("hidden", reset);
+  }
+  const status = $("#authStatus");
+  if (status && authForm.dataset.mode !== mode) status.textContent = "";
   authForm.dataset.mode = mode;
 }
 
@@ -416,8 +511,8 @@ async function loadMe() {
   return data;
 }
 
-async function login(phone, password) {
-  const data = await api("/auth/login", { method: "POST", body: { phone, password } });
+async function login(email, password) {
+  const data = await api("/auth/login", { method: "POST", body: { email, password } });
   setToken(data.access_token, data.user);
   sessionStorage.removeItem("doraemon_features_shown_this_login");
   sessionStorage.removeItem("doraemon_collocation_shown_this_login");
@@ -428,16 +523,25 @@ async function login(phone, password) {
   toast("Đăng nhập thành công", "success");
   location.hash = "#/app";
 }
-async function register(phone, nickname, password) {
-  const data = await api("/auth/register", { method: "POST", body: { phone, nickname, password } });
-  setToken(data.access_token || "", data.user || { phone, nickname });
+async function register(email, username, password) {
+  const data = await api("/auth/register", { method: "POST", body: { email, username, password } });
+  setToken(data.access_token || "", data.user || { email, username, nickname: username });
   sessionStorage.removeItem("doraemon_features_shown_this_login");
   sessionStorage.removeItem("doraemon_collocation_shown_this_login");
   sessionStorage.removeItem("doraemon_phrasal_verb_shown_this_login");
   state.showCollocationOnFirstChat = true;
-  if (!state.token) { await login(phone, password); return; }
+  if (!state.token) { await login(email, password); return; }
   await loadMe(); closeAuth(); toast("Tạo tài khoản thành công", "success"); location.hash = "#/app";
 }
+async function forgotPassword(email) {
+  const data = await api("/auth/forgot-password", { method: "POST", body: { email } });
+  return data?.message || "Nếu email này tồn tại trong hệ thống, Doraemon sẽ gửi hướng dẫn đặt lại mật khẩu.";
+}
+async function resetPassword(token, newPassword) {
+  const data = await api("/auth/reset-password", { method: "POST", body: { token, new_password: newPassword } });
+  return data?.message || "Đổi mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới.";
+}
+
 function logout(showToast = true) {
   state.token = ""; state.profile = null; state.courses = []; state.chatHistory = []; state.messages = []; state.chatboxNew = true; state.showCollocationOnFirstChat = false; state.activeFeature = ""; state.activeFeatureItem = null; sessionStorage.removeItem("doraemon_features_shown_this_login");
   sessionStorage.removeItem("doraemon_collocation_shown_this_login");
@@ -1080,18 +1184,54 @@ async function renderSettings(el){
   const me=state.__me||await api("/auth/me");
   let settings={review_interval_days:1};
   try{settings=await api("/learning/review/settings");}catch{}
-  el.innerHTML=`<div class="settings-grid"><section class="page-card"><div class="card-head"><div><strong>Cấu hình học tập</strong><small>Thiết lập các tùy chọn học tập chính</small></div></div><label class="setting-row"><div><strong>Khóa học đang học</strong><small>Chat và review sẽ dùng course này</small></div><select id="settingsCourse">${(me.subscription?.courses||[]).map(c=>`<option value="${c.course_id}" ${String(c.course_id)===String(state.selectedCourseId)?"selected":""}>${escapeHtml(c.name)}</option>`).join("")}</select></label><label class="setting-row"><div><strong>Ôn tập lại sau</strong><small>Số ngày sau khi hoàn thành nội dung</small></div><input id="reviewDays" type="number" min="1" max="365" value="${Number(settings.review_interval_days||1)}"></label><div class="button-row"><button class="button button-primary" id="saveSettings">Lưu cấu hình</button><button class="button button-secondary" id="resetLearning">🗑 Xóa lịch sử học</button></div></section><aside class="page-card"><h3>👤 Tài khoản</h3><div class="profile-line"><span>Nickname</span><strong>${escapeHtml(me.user?.nickname||"")}</strong></div><div class="profile-line"><span>SĐT</span><strong>${escapeHtml(me.user?.phone||"")}</strong></div><div class="profile-line"><span>Gói</span><strong>${escapeHtml(me.subscription?.plan||"Free")}</strong></div></aside></div>`;
+  el.innerHTML=`<div class="settings-grid"><section class="page-card"><div class="card-head"><div><strong>Cấu hình học tập</strong><small>Thiết lập các tùy chọn học tập chính</small></div></div><label class="setting-row"><div><strong>Khóa học đang học</strong><small>Chat và review sẽ dùng course này</small></div><select id="settingsCourse">${(me.subscription?.courses||[]).map(c=>`<option value="${c.course_id}" ${String(c.course_id)===String(state.selectedCourseId)?"selected":""}>${escapeHtml(c.name)}</option>`).join("")}</select></label><label class="setting-row"><div><strong>Ôn tập lại sau</strong><small>Số ngày sau khi hoàn thành nội dung</small></div><input id="reviewDays" type="number" min="1" max="365" value="${Number(settings.review_interval_days||1)}"></label><div class="button-row"><button class="button button-primary" id="saveSettings">Lưu cấu hình</button><button class="button button-secondary" id="resetLearning">🗑 Xóa lịch sử học</button></div></section><aside class="page-card"><h3>👤 Tài khoản</h3><div class="profile-line"><span>Username</span><strong>${escapeHtml(me.user?.username||me.user?.nickname||"")}</strong></div><div class="profile-line"><span>Email</span><strong>${escapeHtml(me.user?.email||"")}</strong></div><div class="profile-line"><span>Gói</span><strong>${escapeHtml(me.subscription?.plan||"Free")}</strong></div></aside></div>`;
   $("#saveSettings").onclick=async()=>{try{const cid=Number($("#settingsCourse").value||0); if(cid){const d=await api("/learning/select-course",{method:"POST",body:{course_id:cid}});state.selectedCourseId=d.course_id;state.selectedCourseName=d.course_name;} await api("/learning/review/settings",{method:"POST",body:{review_interval_days:Number($("#reviewDays").value||1)}}); toast("Đã lưu cấu hình","success"); closeLearnerPanel(); await renderChat($("#appContent"));}catch(e){toast(e.message,"error");}};
   $("#resetLearning").onclick=async()=>{if(!confirm("Xóa toàn bộ tiến độ, review và lộ trình học? Tài khoản và gói học không bị xóa."))return;try{await api("/learning/reset",{method:"POST"});toast("Đã xóa lịch sử học","success");state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;state.chatboxNew=true;state.messages=[];state.chatHistory=[];state.activeFeature="";state.activeFeatureItem=null;state.view="chat"; closeLearnerPanel(); await renderChat($("#appContent"));}catch(e){toast(e.message,"error");}};
 }
 
 async function boot(){
+  ensureAuthExtras();
   $$("[data-close-modal]").forEach(x=>x.addEventListener("click",closeAuth));
   $$("[data-auth-mode]").forEach(x=>x.addEventListener("click",()=>setAuthMode(x.dataset.authMode)));
-  $("#navAuthBtn").onclick=()=>state.token?location.hash="#/app":openAuth("login"); $("#heroAuthBtn").onclick=()=>openAuth("register");
-  authForm.addEventListener("submit",async e=>{e.preventDefault();const mode=authForm.dataset.mode||"login";const phone=$("#authPhone").value.trim(),nickname=$("#authNickname").value.trim(),password=$("#authPassword").value;const status=$("#authStatus");status.textContent="Đang xử lý…";try{if(mode==='register')await register(phone,nickname,password);else await login(phone,password);}catch(err){status.textContent=err.message;}}); setAuthMode("login");
-  window.addEventListener("hashchange",()=>{if(route()==="app" && state.token)initApp();else renderLanding();});
-  if(route()==="app" && state.token) await initApp(); else renderLanding();
+  $("#navAuthBtn").onclick=()=>state.token?location.hash="#/app":openAuth("login");
+  $("#heroAuthBtn").onclick=()=>openAuth("register");
+  authForm.addEventListener("submit",async e=>{
+    e.preventDefault();
+    const mode=authForm.dataset.mode||"login";
+    const email=$("#authPhone").value.trim();
+    const username=$("#authNickname").value.trim();
+    const password=$("#authPassword").value;
+    const status=$("#authStatus");
+    status.textContent="Đang xử lý…";
+    try {
+      if(mode==='register') {
+        await register(email,username,password);
+      } else if(mode==='forgot') {
+        status.textContent=await forgotPassword(email);
+      } else if(mode==='reset') {
+        const confirm=$("#authPasswordConfirm")?.value || "";
+        const token=authForm.dataset.resetToken || resetTokenFromHash();
+        if(!token) throw new Error("Link đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.");
+        if(password.length<6) throw new Error("Mật khẩu mới phải có ít nhất 6 ký tự.");
+        if(password!==confirm) throw new Error("Hai lần nhập mật khẩu chưa giống nhau.");
+        status.textContent=await resetPassword(token,password);
+        setTimeout(()=>{ location.hash="#"; openAuth("login"); const s=$("#authStatus"); if(s) s.textContent="Đổi mật khẩu thành công. Hãy đăng nhập bằng mật khẩu mới."; },300);
+      } else {
+        await login(email,password);
+      }
+    } catch(err) { status.textContent=err.message; }
+  });
+  setAuthMode("login");
+  window.addEventListener("hashchange",()=>{
+    if(isResetPasswordRoute()) {
+      if(state.token) { setToken("", null); state.token=""; state.profile=null; }
+      renderLanding();
+      openAuth("reset");
+      return;
+    }
+    if(route()==="app" && state.token)initApp();else renderLanding();
+  });
+  if(isResetPasswordRoute()) { if(state.token) { setToken("", null); state.token=""; state.profile=null; } renderLanding(); openAuth("reset"); }
+  else if(route()==="app" && state.token) await initApp(); else renderLanding();
 }
-
 document.addEventListener("DOMContentLoaded",boot);
