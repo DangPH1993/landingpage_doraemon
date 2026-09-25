@@ -1,4 +1,4 @@
-// Doraemon Web Client v31.61 – taller learning area (1.5x desktop)
+// Doraemon Web Client v31.72 – forgot-password UI/action + mail-check feedback
 const API_BASE = (() => {
   const meta = document.querySelector('meta[name="doraemon-api-base"]');
   const configured = (window.DORAEMON_API_BASE || meta?.content || '').trim();
@@ -389,10 +389,23 @@ function ensureAuthExtras() {
     btn.id = "forgotPasswordLink";
     btn.className = "auth-forgot-link";
     btn.textContent = "Quên mật khẩu?";
-    btn.onclick = () => setAuthMode("forgot");
+    btn.onclick = (event) => {
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+      openAuth("forgot");
+    };
     const submit = document.getElementById("authSubmit");
     if (submit?.parentElement) submit.parentElement.insertAdjacentElement("afterend", btn);
     else authForm.appendChild(btn);
+  }
+  if (!document.getElementById("authForgotHint")) {
+    const hint = document.createElement("div");
+    hint.id = "authForgotHint";
+    hint.className = "auth-forgot-hint hidden";
+    hint.setAttribute("role", "status");
+    const submit = document.getElementById("authSubmit");
+    if (submit?.parentElement) submit.parentElement.insertAdjacentElement("afterend", hint);
+    else authForm.appendChild(hint);
   }
   if (!document.getElementById("authPasswordConfirmField")) {
     const wrap = document.createElement("label");
@@ -407,11 +420,23 @@ function ensureAuthExtras() {
     if (!document.getElementById(styleId)) {
       const style = document.createElement("style");
       style.id = styleId;
-      style.textContent = `.auth-forgot-link{display:block;margin:8px auto 0;background:none;border:0;color:#2563eb;font-weight:700;cursor:pointer}.auth-dynamic-field{display:block;margin-top:10px}.auth-dynamic-field span{display:block;margin-bottom:5px}.auth-dynamic-field input{width:100%;box-sizing:border-box}`;
+      style.textContent = `.auth-forgot-link{display:block;margin:10px auto 0;background:none;border:0;color:#2563eb;font-weight:700;cursor:pointer}.auth-forgot-link:hover{text-decoration:underline}.auth-forgot-hint{margin:10px 0 2px;padding:10px 12px;border:1px solid #dbe7ff;border-radius:12px;background:#f5f8ff;color:#334155;font-size:13px;line-height:1.5}.auth-forgot-hint.hidden{display:none}.auth-dynamic-field{display:block;margin-top:10px}.auth-dynamic-field span{display:block;margin-bottom:5px}.auth-dynamic-field input{width:100%;box-sizing:border-box}`;
       document.head.appendChild(style);
     }
   }
 }
+
+// Delegated handler makes the forgot-password action reliable even if the link is
+// injected/re-rendered after boot. It also prevents the form from submitting as a
+// normal button click before setAuthMode("forgot") runs.
+document.addEventListener("click", (event) => {
+  const link = event.target?.closest?.("#forgotPasswordLink");
+  if (!link) return;
+  event.preventDefault();
+  event.stopPropagation();
+  openAuth("forgot");
+});
+
 function isResetPasswordRoute() { return (location.hash || "").startsWith("#/reset-password"); }
 function resetTokenFromHash() {
   const raw = location.hash || "";
@@ -419,7 +444,17 @@ function resetTokenFromHash() {
   if (idx < 0) return "";
   return new URLSearchParams(raw.slice(idx + 1)).get("token") || "";
 }
-function openAuth(mode = "login") { ensureAuthExtras(); authModal.classList.remove("hidden"); authModal.setAttribute("aria-hidden", "false"); setAuthMode(mode); setTimeout(() => { const target = mode === "reset" ? $("#authPassword") : $("#authPhone"); target?.focus(); }, 30); }
+function openAuth(mode = "login") {
+  ensureAuthExtras();
+  authModal.classList.remove("hidden");
+  authModal.setAttribute("aria-hidden", "false");
+  setAuthMode(mode);
+  setTimeout(() => {
+    const target = mode === "reset" ? $("#authPassword") : $("#authPhone");
+    target?.focus();
+    target?.select?.();
+  }, 30);
+}
 function closeAuth() { authModal.classList.add("hidden"); authModal.setAttribute("aria-hidden", "true"); const s = $("#authStatus"); if (s) s.textContent = ""; }
 function setAuthMode(mode) {
   ensureAuthExtras();
@@ -450,9 +485,18 @@ function setAuthMode(mode) {
     setAuthFieldLabel("authPhone", "Email");
   }
   setAuthFieldLabel("authNickname", "Username");
+  const forgotHint = $("#authForgotHint");
+  if (forgotHint) {
+    forgotHint.classList.toggle("hidden", !forgot);
+    forgotHint.textContent = forgot
+      ? "Nhập email đã đăng ký. Doraemon sẽ gửi link đặt lại mật khẩu qua email."
+      : "";
+  }
   if (forgot) {
     if (pass) pass.value = "";
     if (nick) nick.value = "";
+    const emailInput = $("#authPhone");
+    if (emailInput) emailInput.value = emailInput.value.trim();
   }
   if (reset) {
     if (emailInput) emailInput.value = "";
@@ -463,7 +507,11 @@ function setAuthMode(mode) {
   } else if (!register && pass) {
     pass.placeholder = "Mật khẩu";
   }
-  $("#authSubmit").textContent = register ? "Tạo tài khoản" : forgot ? "Gửi link đặt lại mật khẩu" : reset ? "Đặt lại mật khẩu" : "Đăng nhập";
+  const authSubmit = $("#authSubmit");
+  if (authSubmit) {
+    authSubmit.disabled = false;
+    authSubmit.textContent = register ? "Tạo tài khoản" : forgot ? "Gửi link đặt lại mật khẩu" : reset ? "Đặt lại mật khẩu" : "Đăng nhập";
+  }
   $("#authPassword").autocomplete = register || reset ? "new-password" : "current-password";
   const forgotLink = $("#forgotPasswordLink");
   if (forgotLink) {
@@ -1207,7 +1255,17 @@ async function boot(){
       if(mode==='register') {
         await register(email,username,password);
       } else if(mode==='forgot') {
-        status.textContent=await forgotPassword(email);
+        if(!email) throw new Error("Vui lòng nhập email đã đăng ký.");
+        if(!/^\S+@\S+\.\S+$/.test(email)) throw new Error("Email chưa đúng định dạng.");
+        const submit = $("#authSubmit");
+        if(submit) submit.disabled = true;
+        try {
+          const msg = await forgotPassword(email);
+          status.setAttribute("role", "status");
+          status.textContent = `✅ ${msg || "Yêu cầu đặt lại mật khẩu đã được gửi."} Hãy kiểm tra hộp thư đến và cả mục Spam/Thư rác.`;
+        } finally {
+          if(submit) submit.disabled = false;
+        }
       } else if(mode==='reset') {
         const confirm=$("#authPasswordConfirm")?.value || "";
         const token=authForm.dataset.resetToken || resetTokenFromHash();
