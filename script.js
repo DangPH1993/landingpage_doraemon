@@ -146,6 +146,9 @@ function ensureStudyChatLayoutStyles(){
       scrollbar-width:thin;
       overscroll-behavior:contain;
     }
+    .study-plan-lesson-action{margin:8px 0 2px;display:flex;justify-content:flex-start}
+    .study-plan-lesson-button{min-width:210px;box-shadow:0 8px 18px rgba(37,99,235,.12)}
+
     .study-library-list::-webkit-scrollbar,.chat-messages::-webkit-scrollbar{width:8px}
     .study-library-list::-webkit-scrollbar-thumb,.chat-messages::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:999px}
     .study-library-list::-webkit-scrollbar-track,.chat-messages::-webkit-scrollbar-track{background:transparent}
@@ -743,6 +746,12 @@ function renderBlock(block) {
     const options = Array.isArray(block.options) ? block.options : [];
     return `<div class="choice-row">${options.map((o,i)=>`<button class="chat-choice ${i===0?"primary":""}" data-action="${escapeHtml(o.action || "")}" data-label="${escapeHtml(o.label || "")}" data-display="${escapeHtml(o.display_label || o.label || "")}">${escapeHtml(o.label || "Lựa chọn")}</button>`).join("")}</div>`;
   }
+  if (type === "study_plan_lesson") {
+    const lesson = String(block.lesson || "").trim();
+    const contentType = String(block.content_type || "Giáo trình").trim();
+    if (!lesson) return "";
+    return `<div class="study-plan-lesson-action"><button type="button" class="chat-choice primary study-plan-lesson-button" data-plan-course-id="${escapeHtml(block.course_id ?? "")}" data-plan-content-type="${escapeHtml(contentType)}" data-plan-lesson="${escapeHtml(lesson)}" data-plan-topic="${escapeHtml(block.topic || "")}">🎯 ${escapeHtml(block.label || "Học theo lộ trình")}</button></div>`;
+  }
   if (type === "html") return block.html || "";
   return `<div class="chat-text">${sanitizeRichText(block.text || "")}</div>`;
 }
@@ -750,6 +759,23 @@ function renderMessages() {
   const list = $("#chatMessages"); if (!list) return;
   list.innerHTML = state.messages.map((m, idx)=>`<div class="chat-row ${m.role==='user'?'user':'model'}"><div class="chat-avatar ${m.role==='model'?'chat-avatar-doraemon':''}">${m.role==='user'?'Bạn':'<img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy">'}</div><div class="chat-bubble"><div class="chat-role">${m.role==='user'?'Bạn':'Doraemon'}</div>${m.blocks.map(b=>renderBlock({...b,messageIndex:idx})).join("")}</div></div>`).join("");
   $$(".chat-choice", list).forEach(btn => btn.addEventListener("click", () => { const action=btn.dataset.action; if(action==="phrasing_next"){ startNextPhrasing(); return; } sendAction(action, btn.dataset.display || btn.dataset.label); }));
+  $$(".study-plan-lesson-button", list).forEach(btn => btn.addEventListener("click", async () => {
+    const lesson = String(btn.dataset.planLesson || "").trim();
+    if (!lesson) return;
+    const contentType = String(btn.dataset.planContentType || "Giáo trình").trim() || "Giáo trình";
+    const topic = String(btn.dataset.planTopic || "").trim();
+    const courseId = Number(btn.dataset.planCourseId || 0);
+    if (courseId && Number(state.selectedCourseId || 0) !== courseId) {
+      state.selectedCourseId = courseId;
+      try { await api("/learning/select-course", {method:"POST", body:{course_id:courseId}}); } catch {}
+    }
+    btn.disabled = true;
+    try {
+      await startLesson(lesson, contentType, topic);
+    } finally {
+      btn.disabled = false;
+    }
+  }));
   $$(".collocation-shuffle, .phrasal-verb-shuffle", list).forEach(btn => btn.addEventListener("click", () => {
     const kind = btn.dataset.featureKind || (btn.classList.contains("phrasal-verb-shuffle") ? "phrasal_verb" : "collocation");
     const id = Number(btn.dataset.collocationId || btn.dataset.phrasalVerbId || 0);
