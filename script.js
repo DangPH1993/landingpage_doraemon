@@ -594,6 +594,7 @@ async function resetPassword(token, newPassword) {
 }
 
 function logout(showToast = true) {
+  stopAdminUnreadPolling();
   state.token = ""; state.profile = null; state.courses = []; state.chatHistory = []; state.messages = []; state.chatboxNew = true; state.showCollocationOnFirstChat = false; state.activeFeature = ""; state.activeFeatureItem = null; sessionStorage.removeItem("doraemon_features_shown_this_login");
   sessionStorage.removeItem("doraemon_collocation_shown_this_login");
   sessionStorage.removeItem("doraemon_phrasal_verb_shown_this_login");
@@ -608,6 +609,48 @@ function renderLanding() {
   $("#siteNav").classList.remove("app-mode");
   $("#navAuthBtn").textContent = state.token ? "Mở Doraemon" : "Đăng nhập";
   $(".nav-app").textContent = state.token ? "Học ngay →" : "Học trên Web →";
+}
+
+function ensureAdminUnreadStyles(){
+  if(document.getElementById("doraemon-admin-unread-styles")) return;
+  const style=document.createElement("style");
+  style.id="doraemon-admin-unread-styles";
+  style.textContent=`
+    .admin-unread-badge{display:inline-flex;align-items:center;justify-content:center;gap:3px;min-width:22px;height:20px;padding:0 7px;margin-left:auto;border-radius:999px;background:#ef4444;color:#fff;font-size:11px;font-weight:800;line-height:1;box-shadow:0 2px 8px rgba(239,68,68,.25)}
+    .admin-unread-badge.hidden{display:none !important}
+    .admin-menu-row{display:flex !important;align-items:center;gap:8px}
+  `;
+  document.head.appendChild(style);
+}
+
+async function refreshAdminUnreadBadge(){
+  const badge=document.getElementById("adminUnreadBadge");
+  if(!badge || !state.token) return;
+  try{
+    const d=await api("/admin-chat/history?limit=500&mark_read=false");
+    const unread=(d.messages||[]).filter(m=>m?.sender==='admin' && !m?.is_read).length;
+    if(unread>0){
+      badge.textContent=`🔔 ${unread>99?'99+':unread}`;
+      badge.classList.remove("hidden");
+      badge.setAttribute("aria-label",`${unread} tin nhắn mới từ admin`);
+    }else{
+      badge.textContent="";
+      badge.classList.add("hidden");
+      badge.removeAttribute("aria-label");
+    }
+  }catch{}
+}
+
+function startAdminUnreadPolling(){
+  ensureAdminUnreadStyles();
+  window.clearInterval(window.__adminUnreadPoll);
+  refreshAdminUnreadBadge();
+  window.__adminUnreadPoll=setInterval(refreshAdminUnreadBadge,4000);
+}
+
+function stopAdminUnreadPolling(){
+  window.clearInterval(window.__adminUnreadPoll);
+  window.__adminUnreadPoll=null;
 }
 
 function renderAppShell() {
@@ -634,7 +677,7 @@ function renderAppShell() {
             <button data-panel="curriculum">📖 <span>Giáo trình</span></button>
             <button data-panel="plan">🎯 <span>Lộ trình học</span></button>
             <button data-panel="review">🔄 <span>Nội dung ôn tập</span></button>
-            <button data-panel="admin">🛟 <span>Chat với admin</span></button>
+            <button data-panel="admin" class="admin-menu-row">🛟 <span>Chat với admin</span><span id="adminUnreadBadge" class="admin-unread-badge hidden" aria-hidden="true"></span></button>
             <button data-panel="packages">💳 <span>Gói học</span></button>
             <button data-panel="settings">⚙️ <span>Cấu hình học tập</span></button>
             <div class="learner-menu-divider"></div>
@@ -658,6 +701,7 @@ function renderAppShell() {
     $("#learnerMenuBtn")?.setAttribute("aria-expanded", "false");
     openLearnerPanel(btn.dataset.panel);
   }));
+  startAdminUnreadPolling();
   $("#courseSelect")?.addEventListener("change", async e => {
     const cid = e.target.value;
     if (!cid) return;
@@ -1331,7 +1375,7 @@ async function renderPackages(el){
 }
 
 
-async function renderAdmin(el){const data=await api("/admin-chat/history?limit=200"); el.innerHTML=`<div class="page-card admin-card"><div class="card-head"><div><strong>Chat với Admin</strong><small>HTTP polling bảo đảm hoạt động cả khi WebSocket bị gián đoạn</small></div><span class="status-dot">● Đang hoạt động</span></div><div class="admin-messages" id="adminMessages">${(data.messages||[]).map(renderAdminMessage).join("")}</div><div class="admin-composer"><input id="adminInput" placeholder="Nhắn tin cho Admin…"><button class="send-button" id="adminSend">➤</button></div></div>`; const list=$("#adminMessages"); list.scrollTop=list.scrollHeight; $("#adminSend").onclick=sendAdmin; $("#adminInput").addEventListener("keydown",e=>{if(e.key==='Enter')sendAdmin();}); window.clearInterval(window.__adminPoll); window.__adminPoll=setInterval(async()=>{try{const d=await api("/admin-chat/history?limit=200");list.innerHTML=(d.messages||[]).map(renderAdminMessage).join("");list.scrollTop=list.scrollHeight;}catch{}},3500);}
+async function renderAdmin(el){const data=await api("/admin-chat/history?limit=200&mark_read=true"); el.innerHTML=`<div class="page-card admin-card"><div class="card-head"><div><strong>Chat với Admin</strong><small>HTTP polling bảo đảm hoạt động cả khi WebSocket bị gián đoạn</small></div><span class="status-dot">● Đang hoạt động</span></div><div class="admin-messages" id="adminMessages">${(data.messages||[]).map(renderAdminMessage).join("")}</div><div class="admin-composer"><input id="adminInput" placeholder="Nhắn tin cho Admin…"><button class="send-button" id="adminSend">➤</button></div></div>`; const list=$("#adminMessages"); list.scrollTop=list.scrollHeight; $("#adminSend").onclick=sendAdmin; $("#adminInput").addEventListener("keydown",e=>{if(e.key==='Enter')sendAdmin();}); window.clearInterval(window.__adminPoll); window.__adminPoll=setInterval(async()=>{try{const d=await api("/admin-chat/history?limit=200&mark_read=true");list.innerHTML=(d.messages||[]).map(renderAdminMessage).join("");list.scrollTop=list.scrollHeight; await refreshAdminUnreadBadge();}catch{}},3500); await refreshAdminUnreadBadge();}
 function renderAdminMessage(m){return `<div class="admin-msg ${m.sender==='user'?'me':''}"><div class="admin-msg-author">${m.sender==='user'?'Bạn':'Admin'}</div><div class="admin-msg-body">${nl2br(m.message||"")}</div><small>${escapeHtml(fmtDate(m.created_at))}</small></div>`;}
 async function sendAdmin(){const input=$("#adminInput"); const msg=input?.value.trim(); if(!msg)return; input.value=""; try{await api("/admin-chat/send",{method:"POST",body:{client_message_id:(crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`),message:msg}});const d=await api("/admin-chat/history?limit=200");$("#adminMessages").innerHTML=(d.messages||[]).map(renderAdminMessage).join("");$("#adminMessages").scrollTop=$("#adminMessages").scrollHeight;}catch(e){toast(e.message,"error");}}
 
