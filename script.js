@@ -1265,14 +1265,67 @@ async function notifyAdminPackage(code){
   await sendWhenReady();
 }
 
+
+function ensureQrViewerStyles(){
+  if(document.getElementById("doraemon-qr-viewer-styles")) return;
+  const style=document.createElement("style");
+  style.id="doraemon-qr-viewer-styles";
+  style.textContent=`
+    .qr-img{cursor:zoom-in;transition:transform .15s ease,box-shadow .15s ease}
+    .qr-img:hover{transform:scale(1.02);box-shadow:0 8px 22px rgba(15,23,42,.12)}
+    .qr-viewer-overlay{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(15,23,42,.78);backdrop-filter:blur(3px)}
+    .qr-viewer-panel{position:relative;max-width:min(92vw,760px);max-height:92vh;padding:18px;border-radius:18px;background:#fff;box-shadow:0 24px 70px rgba(0,0,0,.28);display:flex;flex-direction:column;align-items:center;gap:12px}
+    .qr-viewer-panel img{display:block;max-width:min(82vw,680px);max-height:78vh;width:auto;height:auto;object-fit:contain;border-radius:10px;background:#fff}
+    .qr-viewer-caption{font-size:13px;color:#475467;text-align:center;overflow-wrap:anywhere}
+    .qr-viewer-close{position:absolute;top:8px;right:8px;width:36px;height:36px;border:0;border-radius:999px;background:rgba(255,255,255,.94);color:#334155;font-size:24px;line-height:1;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+    .qr-viewer-close:hover{background:#f1f5f9}
+  `;
+  document.head.appendChild(style);
+}
+
+function closeQrViewer(){
+  const overlay=$("#qrViewerOverlay");
+  if(overlay) overlay.remove();
+  document.body.classList.remove("qr-viewer-open");
+}
+
+function openQrViewer(url, caption=""){
+  const src=String(url||"").trim();
+  if(!src)return;
+  ensureQrViewerStyles();
+  closeQrViewer();
+  const overlay=document.createElement("div");
+  overlay.id="qrViewerOverlay";
+  overlay.className="qr-viewer-overlay";
+  overlay.setAttribute("role","dialog");
+  overlay.setAttribute("aria-modal","true");
+  overlay.innerHTML=`<div class="qr-viewer-panel"><button type="button" class="qr-viewer-close" aria-label="Đóng">×</button><img src="${escapeHtml(src)}" alt="QR thanh toán kích thước lớn"><div class="qr-viewer-caption">${escapeHtml(caption||"Quét mã QR để thanh toán")}</div></div>`;
+  overlay.addEventListener("click",e=>{if(e.target===overlay)closeQrViewer();});
+  overlay.querySelector(".qr-viewer-close").addEventListener("click",closeQrViewer);
+  document.body.appendChild(overlay);
+  document.body.classList.add("qr-viewer-open");
+}
+
+function initQrViewerEvents(){
+  document.addEventListener("click",e=>{
+    const img=e.target.closest?.(".qr-img");
+    if(!img)return;
+    e.preventDefault();
+    e.stopPropagation();
+    openQrViewer(img.currentSrc||img.src||"", img.closest(".package-card")?.querySelector(".package-month")?.textContent||"");
+  },true);
+  document.addEventListener("keydown",e=>{if(e.key==="Escape")closeQrViewer();});
+}
+
 async function renderPackages(el){
+  ensureQrViewerStyles();
   const [me,pkgs]=await Promise.all([api("/auth/me"),api("/payments/packages")]); const sub=me.subscription||{};
   const paid=String(sub.plan||"Free").toLowerCase()!=="free"; const limit=Number(sub.daily_limit||5);
   const username=String(me.user?.username||state.profile?.username||me.user?.nickname||state.profile?.nickname||"user").trim();
   el.innerHTML=`<div class="page-grid"><section class="page-card"><div class="card-head"><div><strong>Gói học</strong><small>Quyền học áp dụng cho toàn bộ tài khoản</small></div></div><div class="subscription-banner"><div><span>Gói hiện tại</span><strong>${escapeHtml(sub.plan||"Free")}</strong></div><div><span>Trạng thái</span><strong>${escapeHtml(sub.status||"ACTIVE")}</strong></div><div><span>Hết hạn</span><strong>${escapeHtml(sub.expires_at_vn||"Không giới hạn")}</strong></div><div><span>GenAI hôm nay</span><strong>${Number(sub.used_today||0)}/${limit}</strong></div></div><div style="margin:14px 0;padding:12px 14px;border:1px solid #e4e7ec;border-radius:10px;background:#f9fafb"><strong>${paid?'✅ Gói trả phí':'🆓 Gói Free'}</strong><div style="margin-top:5px;color:#475467">${paid?'Học toàn bộ khóa học, tối đa 200 request GenAI mỗi ngày.':'Được học tất cả khóa học, nhưng chỉ mở tối đa 5 bài cho mỗi loại nội dung. Các bài còn lại sẽ hiển thị 🔒.'}</div></div><div class="package-grid">${(pkgs.packages||[]).map(p=>{
     const months=Number(p.months||0);
     const code=months===1?`${username}_muagoi_1thang`:months===3?`${username}_muagoi_3thang`:months===6?`${username}_muagoi_6thang`:`${username}_muagoi_${months}thang`;
-    return `<div class="package-card"><span class="package-month">${months} tháng</span><h3>${escapeHtml(p.plan_name||"")}</h3><strong>${escapeHtml(p.price_display||money(p.price_vnd))}</strong>${p.qr_url?`<img src="${escapeHtml(p.qr_url)}" alt="QR thanh toán" class="qr-img">`:``}<div class="payment-code">${escapeHtml(code)}</div><button class="small-button notify-admin-package" data-package-code="${escapeHtml(code)}">Thông báo user</button></div>`;
+    return `<div class="package-card"><span class="package-month">${months} tháng</span><h3>${escapeHtml(p.plan_name||"")}</h3><strong>${escapeHtml(p.price_display||money(p.price_vnd))}</strong>${p.qr_url?`<img src="${escapeHtml(p.qr_url)}" alt="QR thanh toán" class="qr-img">`:``}<div class="payment-code">${escapeHtml(code)}</div><button class="small-button notify-admin-package" data-package-code="${escapeHtml(code)}">Thông báo đã mua</button></div>`;
   }).join("")}</div></section><aside class="page-card"><h3>🎓 Khóa học</h3>${(sub.courses||[]).length?(sub.courses||[]).map(c=>`<div class="course-entitlement"><strong>${escapeHtml(c.name||"")}</strong><span>${paid?escapeHtml(c.expires_at_vn||"Đang hiệu lực"):"Được học"}</span></div>`).join(""):`<div class="empty-state">Chưa có khóa học.</div>`}</aside></div>`;
   $$(".notify-admin-package").forEach(b=>b.onclick=async()=>{ await notifyAdminPackage(b.dataset.packageCode||""); });
 }
@@ -1292,6 +1345,7 @@ async function renderSettings(el){
 }
 
 async function boot(){
+  initQrViewerEvents();
   ensureAuthExtras();
   $$("[data-close-modal]").forEach(x=>x.addEventListener("click",closeAuth));
   $$("[data-auth-mode]").forEach(x=>x.addEventListener("click",()=>setAuthMode(x.dataset.authMode)));
