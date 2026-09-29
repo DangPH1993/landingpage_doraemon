@@ -500,3 +500,32 @@ button,input,textarea,select{font-family:var(--font-sans)!important;}
 }
 
 /* v50: scope landing header logo sizing; bust script cache */
+
+/* v51: final hero typography correction */
+.hero-v42 .hero-content h1,
+.hero-v42 .hero-content h1 span{
+  font-family:var(--font-sans) !important;
+}
+.hero-v42 .hero-content h1{
+  font-weight:800 !important;
+  line-height:1.08 !important;
+  letter-spacing:-1.9px !important;
+}
+.hero-v42 .hero-content h1 span{
+  font-size:.76em !important;
+  line-height:1.08 !important;
+  letter-spacing:-1.35px !important;
+  margin-top:.06em !important;
+  padding-bottom:.04em !important;
+}
+@media(max-width:700px){
+  .hero-v42 .hero-content h1{
+    line-height:1.10 !important;
+    letter-spacing:-1.05px !important;
+  }
+  .hero-v42 .hero-content h1 span{
+    font-size:.78em !important;
+    line-height:1.10 !important;
+    letter-spacing:-.85px !important;
+  }
+}
