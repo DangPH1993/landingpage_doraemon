@@ -210,3 +210,100 @@ button,input,textarea,select,label,
   .nav-links{display:none}
   .hero-v42 .hero-content h1{font-size:38px;max-width:100%;letter-spacing:-1px}
 }
+
+
+/* v44: definitive landing-page visual corrections */
+.navbar .nav-links{
+  display:flex !important;
+  align-items:center;
+  gap:6px;
+  padding:6px;
+  background:#ffffff;
+  border:1px solid #cfdbea;
+  border-radius:16px;
+  box-shadow:0 10px 26px rgba(38,65,110,.12);
+}
+.navbar .nav-links a{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:36px;
+  padding:8px 14px;
+  border-radius:11px;
+  color:#334a6b;
+  font-size:13px;
+  font-weight:800;
+  letter-spacing:0;
+  background:#f7faff;
+  border:1px solid transparent;
+}
+.navbar .nav-links a:hover,
+.navbar .nav-links a:focus-visible{
+  color:#1d4ed8;
+  background:#eaf2ff;
+  border-color:#c7d8f2;
+}
+.navbar .nav-links a:first-child{
+  color:#1d4ed8;
+  background:#eef4ff;
+  border-color:#cbdcf7;
+}
+
+.hero-v42 .hero-content{
+  max-width:640px;
+  text-align:center !important;
+  margin-inline:auto;
+}
+.hero-v42 .eyebrow{
+  display:inline-block;
+  font-family:"Segoe UI",Arial,sans-serif !important;
+  font-size:13px !important;
+  font-weight:800 !important;
+  letter-spacing:.025em !important;
+  line-height:1.4;
+  color:#445bd2;
+  text-align:center;
+}
+.hero-v42 .hero-content h1{
+  margin:18px auto 18px !important;
+  max-width:620px !important;
+  text-align:center !important;
+  font-family:"Segoe UI",Arial,sans-serif !important;
+  font-size:clamp(44px,5vw,58px) !important;
+  line-height:1.03 !important;
+  letter-spacing:-1.7px !important;
+  font-weight:800 !important;
+  color:#10213e;
+}
+.hero-v42 .hero-content h1 span{
+  display:block;
+  margin-top:2px;
+  font-size:.82em !important;
+  line-height:1.05;
+  letter-spacing:-1.3px;
+  text-align:center;
+}
+.hero-v42 .hero-description{
+  max-width:620px !important;
+  margin:0 auto !important;
+  text-align:center !important;
+  font-family:"Segoe UI",Arial,sans-serif !important;
+  font-size:17px !important;
+  line-height:1.7 !important;
+}
+.hero-v42 .hero-highlight-row,
+.hero-v42 .hero-actions,
+.hero-v42 .hero-note{
+  justify-content:center !important;
+  text-align:center !important;
+}
+
+@media(max-width:980px){
+  .navbar .nav-links{display:none !important;}
+  .hero-v42 .hero-content h1{font-size:50px !important;max-width:600px !important;}
+}
+@media(max-width:700px){
+  .hero-v42 .eyebrow{font-size:12px !important;}
+  .hero-v42 .hero-content h1{font-size:40px !important;max-width:100% !important;letter-spacing:-1px !important;}
+  .hero-v42 .hero-content h1 span{font-size:.88em !important;letter-spacing:-.8px;}
+}
