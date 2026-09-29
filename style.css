@@ -538,3 +538,25 @@ button,input,textarea,select{font-family:var(--font-sans)!important;}
 @media(max-width:700px){
   .hero-v42 .hero-slogan{ text-align:left !important; }
 }
+
+/* v53: slogan must align with the left edge of the hero content.
+   This selector intentionally matches the higher-specificity eyebrow rule above. */
+.hero-v42 .hero-content .hero-slogan{
+  display:block !important;
+  width:100% !important;
+  max-width:none !important;
+  margin:0 0 30px 0 !important;
+  padding:0 !important;
+  text-align:left !important;
+  align-self:flex-start !important;
+  justify-self:start !important;
+  position:relative !important;
+  left:0 !important;
+  transform:none !important;
+}
+@media(max-width:700px){
+  .hero-v42 .hero-content .hero-slogan{
+    text-align:left !important;
+    margin-left:0 !important;
+  }
+}
