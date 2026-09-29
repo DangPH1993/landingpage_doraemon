@@ -242,3 +242,102 @@ button,input,textarea,select,label,
   .hero-v42 .hero-content .eyebrow{margin-bottom:14px;}
   .hero-v42 .hero-content h1{line-height:1.10 !important;}
 }
+
+
+/* v46: final landing visual corrections */
+.nav-links{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:32px !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+  border-radius:0 !important;
+  color:#334155 !important;
+  font-size:15px !important;
+  font-weight:800 !important;
+}
+.nav-links a{
+  display:inline-block !important;
+  margin:0 !important;
+  padding:4px 0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+  color:#334155 !important;
+  font-size:15px !important;
+  font-weight:800 !important;
+  line-height:1.35 !important;
+}
+.nav-links a:hover,
+.nav-links a:focus-visible{
+  background:transparent !important;
+  color:#2563eb !important;
+  box-shadow:none !important;
+  transform:none !important;
+  text-decoration:none !important;
+}
+
+.hero-v42 .hero-content{
+  text-align:left !important;
+}
+.hero-v42 .hero-content .eyebrow{
+  display:block !important;
+  width:auto !important;
+  text-align:center !important;
+  margin:0 0 16px !important;
+  line-height:1.45 !important;
+  letter-spacing:.06em !important;
+}
+.hero-v42 .hero-content h1{
+  display:block !important;
+  text-align:left !important;
+  font-family:Arial,Helvetica,sans-serif !important;
+  font-weight:800 !important;
+  font-size:clamp(46px,5.3vw,68px) !important;
+  line-height:1.08 !important;
+  letter-spacing:-1.5px !important;
+  margin:14px 0 20px !important;
+  padding:0 0 .12em !important;
+  height:auto !important;
+  min-height:0 !important;
+  overflow:visible !important;
+  text-wrap:balance !important;
+}
+.hero-v42 .hero-content h1 span{
+  display:block !important;
+  overflow:visible !important;
+  padding-bottom:.03em !important;
+}
+.hero-v42 .hero-description,
+.hero-v42 .hero-highlight-row,
+.hero-v42 .hero-actions,
+.hero-v42 .hero-note{
+  text-align:left !important;
+}
+.hero-v42 .hero-highlight-row,
+.hero-v42 .hero-actions{
+  justify-content:flex-start !important;
+}
+.hero-v42 .hero-content,
+.hero-v42 .hero-content *{
+  overflow:visible !important;
+}
+
+@media(max-width:700px){
+  .nav-links{display:none !important;}
+  .hero-v42 .hero-content .eyebrow{
+    text-align:center !important;
+    line-height:1.45 !important;
+  }
+  .hero-v42 .hero-content h1{
+    font-size:40px !important;
+    line-height:1.10 !important;
+    letter-spacing:-1px !important;
+    padding-bottom:.15em !important;
+  }
+}
