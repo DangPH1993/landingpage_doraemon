@@ -430,3 +430,73 @@ button,input,textarea,select{font-family:var(--font-sans)!important;}
   .hero-v42 .hero-description{font-size:15.5px!important;}
   .hero-v42 .hero-visual-v42{min-height:360px!important;}
 }
+
+
+/* v49: precise landing-page layout correction */
+.navbar .logo-icon{
+  width:52px !important;
+  height:52px !important;
+  border-radius:15px !important;
+  font-size:22px !important;
+}
+.navbar .logo>span{
+  font-size:28px !important;
+  font-weight:850 !important;
+  letter-spacing:-.4px !important;
+}
+.navbar-inner{min-height:82px !important;}
+
+.hero-v42 .hero-content{
+  text-align:left !important;
+}
+.hero-v42 .hero-slogan-wrap{display:none !important;}
+.hero-v42 .hero-slogan{
+  display:block !important;
+  width:100% !important;
+  max-width:575px !important;
+  margin:0 0 30px !important;
+  text-align:center !important;
+  font-family:Arial,Helvetica,sans-serif !important;
+  font-size:14px !important;
+  font-weight:700 !important;
+  line-height:1.5 !important;
+  letter-spacing:.01em !important;
+  color:#4255d8 !important;
+}
+.hero-v42 .hero-content h1{
+  max-width:575px !important;
+  margin:0 0 24px !important;
+  text-align:center !important;
+  font-family:Arial,Helvetica,sans-serif !important;
+  font-weight:800 !important;
+  font-size:clamp(48px,5vw,66px) !important;
+  line-height:1.16 !important;
+  letter-spacing:-1.7px !important;
+  padding:0 0 .14em !important;
+  overflow:visible !important;
+  text-wrap:balance !important;
+}
+.hero-v42 .hero-content h1 span{
+  display:block !important;
+  padding-bottom:.10em !important;
+  line-height:1.16 !important;
+  overflow:visible !important;
+}
+.hero-v42 .hero-description,
+.hero-v42 .hero-highlight-row,
+.hero-v42 .hero-actions,
+.hero-v42 .hero-note{
+  text-align:left !important;
+}
+.hero-v42 .hero-highlight-row,
+.hero-v42 .hero-actions{justify-content:flex-start !important;}
+
+@media(max-width:700px){
+  .navbar .logo-icon{width:44px !important;height:44px !important;font-size:19px !important;}
+  .navbar .logo>span{font-size:23px !important;}
+  .navbar-inner{min-height:68px !important;}
+  .hero-v42 .hero-slogan{font-size:12px !important;margin-bottom:20px !important;}
+  .hero-v42 .hero-content h1{font-size:41px !important;line-height:1.16 !important;letter-spacing:-1px !important;padding-bottom:.18em !important;}
+}
+
+/* v50: scope landing header logo sizing; bust script cache */
