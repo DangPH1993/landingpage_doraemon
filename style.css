@@ -529,3 +529,12 @@ button,input,textarea,select{font-family:var(--font-sans)!important;}
     letter-spacing:-.85px !important;
   }
 }
+
+/* v52: left-align landing hero slogan */
+.hero-v42 .hero-slogan{
+  text-align:left !important;
+  width:100% !important;
+}
+@media(max-width:700px){
+  .hero-v42 .hero-slogan{ text-align:left !important; }
+}
