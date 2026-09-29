@@ -1445,3 +1445,11 @@ async function boot(){
   else if(route()==="app" && state.token) await initApp(); else renderLanding();
 }
 document.addEventListener("DOMContentLoaded",boot);
+
+
+// v49 defensive landing headline cleanup: the current headline has no trailing period.
+document.addEventListener("DOMContentLoaded",()=>{
+  const h=document.querySelector(".hero-v42 .hero-content h1");
+  if(!h) return;
+  h.querySelectorAll("span").forEach(el=>{ el.textContent=String(el.textContent||"").replace(/\.$/g,""); });
+});
