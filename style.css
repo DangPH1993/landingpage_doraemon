@@ -1577,3 +1577,108 @@ button,input,textarea,select{font-family:var(--font-sans)!important;}
   .steps.steps-v42 .step h3{font-size:19px !important;}
   .steps.steps-v42 .step p{font-size:13px !important;}
 }
+
+
+/* v61: landing trust-strip removed from the hero flow to reduce visual clutter. */
+
+
+/* v62: landing typography normalization — increase small/supporting text for consistent readability. */
+#landingView .section-label,
+#landingView .eyebrow{
+  font-size:13px !important;
+  line-height:1.35 !important;
+}
+#landingView .hero-description,
+#landingView .section-heading p,
+#landingView .feature-card.featured-card p,
+#landingView .content-showcase .section-heading p,
+#landingView .content-feature-card p,
+#landingView .adaptive-copy>p,
+#landingView .audience-copy>p,
+#landingView .audience-quote p,
+#landingView .steps.steps-v42 .step p,
+#landingView .cta-content p{
+  font-size:16px !important;
+  line-height:1.72 !important;
+}
+#landingView .hero-note{
+  font-size:14px !important;
+  line-height:1.6 !important;
+}
+#landingView .hero-highlight-row span,
+#landingView .content-chips span,
+#landingView .audience-points span{
+  font-size:14px !important;
+  line-height:1.35 !important;
+}
+#landingView .feature-card.featured-card a,
+#landingView .content-card-link,
+#landingView .price-highlight .button,
+#landingView .feature-card.featured-card .button{
+  font-size:14px !important;
+}
+#landingView .content-card-label,
+#landingView .content-card-mini-label{
+  font-size:13px !important;
+  line-height:1.4 !important;
+}
+#landingView .adaptive-list small{
+  font-size:13px !important;
+  line-height:1.5 !important;
+}
+#landingView .adaptive-list strong{
+  font-size:16px !important;
+  line-height:1.4 !important;
+}
+#landingView .adaptive-core strong{
+  font-size:14px !important;
+}
+#landingView .adaptive-core span{
+  font-size:11px !important;
+  line-height:1.45 !important;
+}
+#landingView .adaptive-node{
+  font-size:13px !important;
+}
+#landingView .audience-quote small,
+#landingView .price-highlight small,
+#landingView .floating-card small{
+  font-size:13px !important;
+  line-height:1.5 !important;
+}
+#landingView .floating-card strong{
+  font-size:14px !important;
+}
+#landingView .dashboard-time,
+#landingView .dashboard-plan span,
+#landingView .dashboard-progress span,
+#landingView .dashboard-tags span{
+  font-size:13px !important;
+}
+#landingView .dashboard-main p{
+  font-size:14px !important;
+  line-height:1.55 !important;
+}
+#landingView .nav-links{
+  font-size:15px !important;
+}
+#landingView .button{
+  font-size:15px !important;
+}
+@media(max-width:700px){
+  #landingView .section-heading p,
+  #landingView .feature-card.featured-card p,
+  #landingView .content-feature-card p,
+  #landingView .adaptive-copy>p,
+  #landingView .audience-copy>p,
+  #landingView .audience-quote p,
+  #landingView .steps.steps-v42 .step p,
+  #landingView .cta-content p{
+    font-size:15px !important;
+  }
+  #landingView .content-showcase .section-heading p{font-size:15px !important;}
+  #landingView .feature-card.featured-card a,
+  #landingView .content-card-link{font-size:14px !important;}
+  #landingView .hero-description{font-size:15.5px !important;}
+  #landingView .hero-note{font-size:13.5px !important;}
+}
