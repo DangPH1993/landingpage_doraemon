@@ -1396,3 +1396,25 @@ button,input,textarea,select{font-family:var(--font-sans)!important;}
   .adaptive-copy{padding-right:0 !important;}
   .adaptive-grid{gap:24px !important;}
 }
+
+
+/* v59: pricing heading cleanup — keep the headline on one line and remove redundant subtitle. */
+.pricing .pricing-heading{
+  max-width:1100px !important;
+  margin-bottom:32px !important;
+}
+.pricing .pricing-heading h2{
+  white-space:nowrap !important;
+  font-size:clamp(38px,4.15vw,50px) !important;
+  letter-spacing:-1.5px !important;
+}
+@media(max-width:900px){
+  .pricing .pricing-heading h2{
+    white-space:normal !important;
+    font-size:clamp(34px,6vw,44px) !important;
+  }
+}
+@media(max-width:700px){
+  .pricing .pricing-heading{margin-bottom:28px !important;}
+  .pricing .pricing-heading h2{font-size:32px !important;letter-spacing:-.8px !important;}
+}
