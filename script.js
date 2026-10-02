@@ -607,8 +607,20 @@ function renderLanding() {
   landingView.classList.remove("hidden");
   appView.classList.add("hidden");
   $("#siteNav").classList.remove("app-mode");
-  $("#navAuthBtn").textContent = state.token ? "Mở Doraemon" : "Đăng nhập";
-  $(".nav-app").textContent = state.token ? "Học ngay →" : "Học trên Web →";
+
+  const navAuthBtn = $("#navAuthBtn");
+  const navAppBtn = $(".nav-app");
+  const loggedIn = Boolean(state.token);
+
+  // Landing page: when the learner is not logged in, keep a single clear CTA
+  // in the top-right instead of showing two competing buttons. After login,
+  // restore the two authenticated actions for quick access to the app.
+  navAuthBtn.textContent = loggedIn ? "Mở Doraemon" : "Đăng nhập";
+  navAuthBtn.classList.toggle("button-primary", !loggedIn);
+  navAuthBtn.classList.toggle("button-secondary", loggedIn);
+  navAuthBtn.classList.toggle("nav-login-single", !loggedIn);
+  navAppBtn.textContent = "Học ngay →";
+  navAppBtn.classList.toggle("hidden", !loggedIn);
 }
 
 function ensureAdminUnreadStyles(){
