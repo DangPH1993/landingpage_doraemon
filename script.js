@@ -562,6 +562,20 @@ async function loadMe() {
   return data;
 }
 
+async function enterLearningApp() {
+  if (!state.token) {
+    openAuth("login");
+    return;
+  }
+  // Navigate and render immediately instead of waiting only for hashchange.
+  // This avoids a race where the browser updates the URL but the learning screen
+  // does not mount until a later navigation event.
+  if (location.hash !== "#/app") location.hash = "#/app";
+  if (appView.classList.contains("hidden")) {
+    await initApp();
+  }
+}
+
 async function login(email, password) {
   const data = await api("/auth/login", { method: "POST", body: { email, password } });
   setToken(data.access_token, data.user);
@@ -572,7 +586,7 @@ async function login(email, password) {
   await loadMe();
   closeAuth();
   toast("Đăng nhập thành công", "success");
-  location.hash = "#/app";
+  await enterLearningApp();
 }
 async function register(email, username, password) {
   const data = await api("/auth/register", { method: "POST", body: { email, username, password } });
@@ -582,7 +596,7 @@ async function register(email, username, password) {
   sessionStorage.removeItem("doraemon_phrasal_verb_shown_this_login");
   state.showCollocationOnFirstChat = true;
   if (!state.token) { await login(email, password); return; }
-  await loadMe(); closeAuth(); toast("Tạo tài khoản thành công", "success"); location.hash = "#/app";
+  await loadMe(); closeAuth(); toast("Tạo tài khoản thành công", "success"); await enterLearningApp();
 }
 async function forgotPassword(email) {
   const data = await api("/auth/forgot-password", { method: "POST", body: { email } });
@@ -1444,14 +1458,18 @@ async function boot(){
     } catch(err) { status.textContent=err.message; }
   });
   setAuthMode("login");
-  window.addEventListener("hashchange",()=>{
+  window.addEventListener("hashchange",async ()=>{
     if(isResetPasswordRoute()) {
       if(state.token) { setToken("", null); state.token=""; state.profile=null; }
       renderLanding();
       openAuth("reset");
       return;
     }
-    if(route()==="app" && state.token)initApp();else renderLanding();
+    if(route()==="app" && state.token){
+      // The login/register path may already have mounted the app before the
+      // browser emits hashchange. Avoid initializing the learning screen twice.
+      if(appView.classList.contains("hidden")) await initApp();
+    }else renderLanding();
   });
   if(isResetPasswordRoute()) { if(state.token) { setToken("", null); state.token=""; state.profile=null; } renderLanding(); openAuth("reset"); }
   else if(route()==="app" && state.token) await initApp(); else renderLanding();
