@@ -26,6 +26,7 @@ const state = {
   freeChatTutor: false,
   phrasingTask: "",
   phrasingContext: [],
+  __initAppPromise: null,
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -275,10 +276,14 @@ function resolveMediaUrl(raw){
   }catch{return value;}
 }
 
-function sanitizeRichText(value) {
+function sanitizeRichText(value, options = {}) {
   if (value == null || value === "") return "";
+  const allowPipeTables = options.allowPipeTables !== false;
   let src = decodeHtmlEntities(value).replace(/\r\n?/g, "\n");
-  src = pipeRowsToHtml(src);
+  // Pipe-separated text is auto-converted to a table only for normal chat.
+  // Curriculum/exercise content must preserve the exact source text/HTML
+  // because `|` can be a real separator inside an exercise passage, not a Markdown table.
+  if (allowPipeTables) src = pipeRowsToHtml(src);
   src = markdownToRichHtml(src);
   const box = document.createElement("div");
   if (/<\s*(?:b|strong|i|em|u|br|p|div|span|img)\b/i.test(src)) box.innerHTML = src;
@@ -762,8 +767,20 @@ async function ensureSelectedCourse() {
   }
 }
 async function initApp() {
-  try { state.__me = await loadMe(); await ensureSelectedCourse(); } catch (e) { renderAppShell(); $("#appContent").innerHTML = `<div class="empty-state error">Không thể tải tài khoản: ${escapeHtml(e.message)}</div>`; return; }
-  state.view = "chat"; renderAppShell(); await renderChat($("#appContent"));
+  // Share one initialization promise across login() and hashchange.
+  // Both can fire almost simultaneously after setting #/app. Without this
+  // guard, renderChat() may run twice and each call can request /session/welcome,
+  // producing duplicate greeting bubbles.
+  if (state.__initAppPromise) return state.__initAppPromise;
+  state.__initAppPromise = (async () => {
+    try { state.__me = await loadMe(); await ensureSelectedCourse(); } catch (e) { renderAppShell(); $("#appContent").innerHTML = `<div class="empty-state error">Không thể tải tài khoản: ${escapeHtml(e.message)}</div>`; return; }
+    state.view = "chat"; renderAppShell(); await renderChat($("#appContent"));
+  })();
+  try {
+    return await state.__initAppPromise;
+  } finally {
+    state.__initAppPromise = null;
+  }
 }
 async function loadView() { const el=$("#appContent"); if(!el)return; try { await renderChat(el); } catch(e){ el.innerHTML=`<div class="empty-state error"><strong>Có lỗi.</strong><div>${escapeHtml(e.message)}</div></div>`; } }
 
@@ -823,7 +840,8 @@ function renderBlock(block) {
     return `<div class="study-plan-lesson-action"><button type="button" class="chat-choice primary study-plan-lesson-button" data-plan-course-id="${escapeHtml(block.course_id ?? "")}" data-plan-content-type="${escapeHtml(contentType)}" data-plan-lesson="${escapeHtml(lesson)}" data-plan-topic="${escapeHtml(block.topic || "")}">🎯 ${escapeHtml(block.label || "Học theo lộ trình")}</button></div>`;
   }
   if (type === "html") return block.html || "";
-  return `<div class="chat-text">${sanitizeRichText(block.text || "")}</div>`;
+  const allowPipeTables = block?.allowPipeTables !== false;
+  return `<div class="chat-text">${sanitizeRichText(block.text || "", {allowPipeTables})}</div>`;
 }
 function renderMessages() {
   const list = $("#chatMessages"); if (!list) return;
@@ -885,7 +903,15 @@ async function sendChat(prompt, imageBase64 = null, proactive = false, action = 
     };
     state.chatboxNew = false;
     const data = await api("/api/proxy-chat", {method:"POST", body:payload});
-    bubble.blocks = data.content_blocks?.length ? data.content_blocks : textBlocksFromReply(data.reply);
+    const rawBlocks = data.content_blocks?.length ? data.content_blocks : textBlocksFromReply(data.reply);
+    // Once a lesson is being studied, render its text without chat-specific
+    // pipe-table inference. This keeps Curriculum/Exercise content visually
+    // identical to the Admin source while preserving pipe-table support in chat.
+    const lessonContext = Boolean(state.activeContentType && String(state.activeContentType).trim());
+    bubble.blocks = rawBlocks.map(b => {
+      if (!b || typeof b !== "object" || (b.type || "text") !== "text") return b;
+      return {...b, allowPipeTables: !lessonContext};
+    });
     if (state.messages.includes(bubble) === false) state.messages.push(bubble);
     if (userLabel) rememberChatTurn("user", userLabel);
     if (data.reply) rememberChatTurn("model", data.reply);
@@ -968,8 +994,15 @@ async function shuffleLearningFeature(kind, messageIndex, excludeId){
   }
 }
 async function shuffleCollocation(messageIndex, excludeId){ return shuffleLearningFeature("collocation", messageIndex, excludeId); }
+let startWelcomeInFlight = false;
 async function startWelcome() {
-  state.activeFeature = "";
+  // Multiple initApp/renderChat calls can race during login/hash navigation.
+  // Only one welcome request may be active at a time, otherwise the same
+  // greeting is appended twice to the chat.
+  if (startWelcomeInFlight) return;
+  startWelcomeInFlight = true;
+  try {
+    state.activeFeature = "";
   state.activeFeatureItem = null;
   state.messages = []; state.chatHistory = [];
   const shouldShowFeatures = Boolean(state.showCollocationOnFirstChat) && sessionStorage.getItem("doraemon_features_shown_this_login") !== "1";
@@ -1002,7 +1035,10 @@ async function startWelcome() {
     if (data.message) rememberChatTurn("model", data.message);
     state.messages.push({role:"model",blocks:data.content_blocks?.length ? data.content_blocks : textBlocksFromReply(data.message)});
   } catch (e) { state.messages.push({role:"model",blocks:textBlocksFromReply(`Chào cậu! Có lỗi khi tải phiên chào mừng: ${e.message}`)}); }
-  renderMessages();
+    renderMessages();
+  } finally {
+    startWelcomeInFlight = false;
+  }
 }
 
 async function renderChat(el) {
@@ -1455,7 +1491,12 @@ async function boot(){
       } else {
         await login(email,password);
       }
-    } catch(err) { status.textContent=err.message; }
+    } catch(err) {
+      const msg = err?.message || "Đăng nhập thất bại.";
+      status.setAttribute("role", "alert");
+      status.textContent = `❌ ${msg}`;
+      toast(msg, "error");
+    }
   });
   setAuthMode("login");
   window.addEventListener("hashchange",async ()=>{
