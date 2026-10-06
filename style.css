@@ -1682,3 +1682,13 @@ button,input,textarea,select{font-family:var(--font-sans)!important;}
   #landingView .hero-description{font-size:15.5px !important;}
   #landingView .hero-note{font-size:13.5px !important;}
 }
+
+/* v71: study library collapsible groups + Chat Now mode */
+.lesson-section-head{display:grid!important;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:5px!important;cursor:default}
+.lesson-section-toggle{width:20px;height:20px;padding:0;border:0;background:transparent;color:#64748b;font-size:13px;line-height:20px;border-radius:6px;cursor:pointer;display:grid;place-items:center}
+.lesson-section-toggle:hover{background:#eef4ff;color:#2563eb}
+.lesson-section-body{display:none}
+.lesson-section.expanded .lesson-section-body{display:block}
+.chat-now-button{border-color:#9bb9ff!important;background:linear-gradient(135deg,#edf4ff,#f5f0ff)!important;color:#3158d5!important;font-weight:850!important}
+.chat-now-button:hover{border-color:#718fff!important;background:linear-gradient(135deg,#e5efff,#eee8ff)!important}
+@media(max-width:720px){.lesson-section-head{grid-template-columns:22px minmax(0,1fr) auto}.chat-toolbar-actions{padding-bottom:4px}}
