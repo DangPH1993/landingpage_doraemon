@@ -1,4 +1,4 @@
-// Doraemon Web Client v71 – Chat Now + library filters/collapsible groups
+// Doraemon Web Client v72 – Chat Now + library filters/collapsible groups
 const API_BASE = (() => {
   const meta = document.querySelector('meta[name="doraemon-api-base"]');
   const configured = (window.DORAEMON_API_BASE || meta?.content || '').trim();
@@ -1171,14 +1171,15 @@ async function renderChat(el) {
     const typeOrder=["Giáo trình","Từ vựng","Ngữ pháp","Bài tập","Luyện viết","Truyện đọc"];
     const types=[...typeOrder.filter(t=>grouped[t]?.length),...Object.keys(grouped).filter(x=>!typeOrder.includes(x))];
     const cardRows=[];
-    const sections=types.filter(t=>grouped[t]?.length).map(t=>`<div class="lesson-section" data-section-type="${escapeHtml(t)}"><div class="lesson-section-head"><button type="button" class="lesson-section-toggle" aria-expanded="false" title="Mở/đóng nhóm">▸</button><span>${iconType(t)} ${escapeHtml(t)}</span><small class="lesson-section-count">${new Set(grouped[t].map(x=>`${x.lesson}|${x.topic||""}`)).size} bài</small></div><div class="lesson-section-body">${uniqRows(grouped[t]).slice(0,30).map(r=>{
+    const sections=types.filter(t=>grouped[t]?.length).map((t,sectionIndex)=>{const initiallyExpanded=sectionIndex===0; return `<div class="lesson-section${initiallyExpanded?' expanded':''}" data-section-type="${escapeHtml(t)}"><div class="lesson-section-head"><button type="button" class="lesson-section-toggle" aria-expanded="${initiallyExpanded?'true':'false'}" title="Mở/đóng nhóm">${initiallyExpanded?'▾':'▸'}</button><span>${iconType(t)} ${escapeHtml(t)}</span><small class="lesson-section-count">${new Set(grouped[t].map(x=>`${x.lesson}|${x.topic||""}`)).size} bài</small></div><div class="lesson-section-body">${uniqRows(grouped[t]).slice(0,30).map(r=>{
       const actualType=String(r.content_type||t).trim();
       const key=`${r.course_id!=null?String(r.course_id):""}|${actualType.toLocaleLowerCase("vi-VN")}|${String(r.lesson||"").trim().toLocaleLowerCase("vi-VN")}|${String(r.topic||"").trim().toLocaleLowerCase("vi-VN")}`;
       const st=lessonStatus(progressMap.get(key));
       cardRows.push({type:actualType,status:st.cls});
       const locked=Boolean(r.locked);
       return `<button class="lesson-card compact ${locked?'locked':''}" data-lesson="${escapeHtml(r.lesson)}" data-type="${escapeHtml(actualType)}" data-topic="${escapeHtml(r.topic||"")}" data-status="${escapeHtml(st.cls)}" data-locked="${locked?'1':'0'}" ${locked?'aria-disabled="true"':''} style="${locked?'opacity:.58;cursor:not-allowed;':''}"><div class="lesson-card-copy"><strong>${escapeHtml(r.lesson)}</strong>${r.topic?`<small>${escapeHtml(r.topic)}</small>`:""}</div><span class="lesson-status-tag ${locked?'not-started':st.cls}">${locked?'🔒 Đã khóa':st.label}</span><span class="lesson-card-open">${locked?'🔒':'Học →'}</span></button>`;
-    }).join("")}</div></div>`).join("");
+    }).join("")}</div></div>`});
+
     ensureLibraryFilterStyles();
     const typeFilterOptions=types.map(t=>`<label class="library-filter-option"><input type="checkbox" value="${escapeHtml(t)}"> <span>${escapeHtml(t)}</span></label>`).join("");
     const statusOptions=[
