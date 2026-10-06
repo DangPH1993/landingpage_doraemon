@@ -1,4 +1,4 @@
-// Doraemon Web Client v75 – Chat Now + library filters/collapsible groups
+// Doraemon Web Client v76 – Chat Now + library filters/collapsible groups
 const API_BASE = (() => {
   const meta = document.querySelector('meta[name="doraemon-api-base"]');
   const configured = (window.DORAEMON_API_BASE || meta?.content || '').trim();
@@ -1140,7 +1140,7 @@ async function renderChat(el) {
   ensureStudyChatLayoutStyles();
   el.innerHTML = `<div class="study-grid">
     <aside class="study-library page-card"><div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">Đang học</span></div><button class="tutor-launch-card" id="freeTutorBtn"><span class="tutor-launch-avatar" aria-hidden="true"><img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy"></span><span class="tutor-launch-copy"><strong>Trò chuyện cùng gia sư</strong><small>Doraemon sẽ đồng hành và giúp cậu cải thiện những điểm còn yếu.</small></span><span class="tutor-launch-arrow">→</span></button><div class="study-library-list"><div class="loading">Đang tải nội dung…</div></div><div class="library-note">💡 Chọn bài để Doraemon mở đúng ngữ cảnh học. Trạng thái chi tiết của Giáo trình nằm trong menu <b>Thông tin người học → Giáo trình</b>.</div></aside>
-    <section class="chat-panel page-card"><div class="chat-toolbar"><div class="chat-toolbar-copy"><span class="section-label">${state.chatNow?'CHAT NOW':'PHIÊN HỌC'}</span><strong>${state.chatNow?'Chat now':'Học cùng Doraemon'}</strong><small>${state.chatNow?'Trò chuyện bằng ngoại ngữ trong một tình huống giả định vui vẻ; Doraemon vẫn sửa lỗi tự nhiên khi cậu viết sai.':'Doraemon hướng dẫn, giải thích, đặt câu hỏi và phản hồi ngay trong cùng một phòng học.'}</small></div><div class="chat-toolbar-actions"><button class="feature-launch-button chat-now-button" id="chatNowBtn">Chat now !</button><button class="feature-launch-button" id="collocationBtn">Collocation</button><button class="feature-launch-button" id="phrasalVerbBtn">Phrasal verb</button><button class="feature-launch-button" id="phrasingBtn">Phrasing</button><button class="small-button" id="newChatBtn">＋ ${state.chatNow?'Phiên Chat Now mới':'Phiên mới'}</button></div></div><div class="chat-messages" id="chatMessages"></div><div class="chat-composer"><textarea id="chatInput" rows="1" placeholder="Hỏi Doraemon hoặc trả lời câu hỏi…"></textarea><button class="send-button" id="sendBtn" aria-label="Gửi tin nhắn">➤</button></div><div class="composer-hint">Enter để gửi · Shift+Enter để xuống dòng · Có thể dán ảnh bài tập vào ô chat</div></section>
+    <section class="chat-panel page-card"><div class="chat-toolbar"><div class="chat-toolbar-copy"><span class="section-label">${state.chatNow?'CHAT NOW':'PHIÊN HỌC'}</span><strong>${state.chatNow?'Chat now':'Học cùng Doraemon'}</strong><small>${state.chatNow?'Trò chuyện bằng ngoại ngữ trong một tình huống giả định vui vẻ; Doraemon vẫn sửa lỗi tự nhiên khi cậu viết sai.':'Doraemon hướng dẫn, giải thích, đặt câu hỏi và phản hồi ngay trong cùng một phòng học.'}</small></div><div class="chat-toolbar-actions"><button class="feature-launch-button chat-now-button" id="chatNowBtn">Chat now !</button><button class="feature-launch-button" id="collocationBtn">Collocation</button><button class="feature-launch-button" id="phrasalVerbBtn">Phrasal verb</button><button class="feature-launch-button" id="phrasingBtn">Phrasing</button><button class="small-button" id="newChatBtn">＋ Phiên mới</button></div></div><div class="chat-messages" id="chatMessages"></div><div class="chat-composer"><textarea id="chatInput" rows="1" placeholder="Hỏi Doraemon hoặc trả lời câu hỏi…"></textarea><button class="send-button" id="sendBtn" aria-label="Gửi tin nhắn">➤</button></div><div class="composer-hint">Enter để gửi · Shift+Enter để xuống dòng · Có thể dán ảnh bài tập vào ô chat</div></section>
   </div>`;
   try {
     const [catalog, summary] = await Promise.all([
@@ -1202,8 +1202,20 @@ async function renderChat(el) {
   $("#phrasalVerbBtn").onclick = () => showLearningFeature("phrasal_verb");
   $("#phrasingBtn").onclick = () => launchPhrasing();
   $("#newChatBtn").onclick = async () => {
-    if(state.chatNow){ await launchChatNow(); return; }
-    state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`; state.chatboxNew=true; state.messages=[]; state.chatHistory=[]; state.activeContentType=""; state.activeLesson=""; state.activeFeature=""; state.activeFeatureItem=null; state.freeChatTutor=false; state.chatNow=false; state.phrasingTask=""; state.phrasingContext=[]; startWelcome();
+    await exitChatNowBeforeSwitch();
+    state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;
+    state.chatboxNew=true;
+    state.messages=[];
+    state.chatHistory=[];
+    state.activeContentType="";
+    state.activeLesson="";
+    state.activeFeature="";
+    state.activeFeatureItem=null;
+    state.freeChatTutor=false;
+    state.chatNow=false;
+    state.phrasingTask="";
+    state.phrasingContext=[];
+    startWelcome();
   };
   const launchTutor = async () => {
     await exitChatNowBeforeSwitch();
