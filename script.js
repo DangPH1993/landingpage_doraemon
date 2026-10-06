@@ -276,10 +276,28 @@ function resolveMediaUrl(raw){
   }catch{return value;}
 }
 
+function normalizeCurriculumBulletChars(value){
+  let text=String(value??"");
+  if(!text)return "";
+  const prefix=/(^|>|\n|\r)(\s*)/;
+  const mappings={"\uF0B7":"•","\uF0D8":"➢","\uF0D9":"➢","\uF0DA":"➢","\uF0DB":"➢","\uF0A7":"❖","\uF076":"❖","\uF0FC":"✓","\uF0D0":"◆"};
+  for(const [src,dst] of Object.entries(mappings)) text=text.replace(new RegExp(prefix.source+src+"(?=\\s)","g"),(_,a,b)=>a+b+dst);
+  text=text.replace(new RegExp(prefix.source+"¾(?=\\s+[A-ZÀ-ỴĐ])","g"),(_,a,b)=>a+b+"➢");
+  text=text.replace(new RegExp(prefix.source+"□(?=\\s+[A-ZÀ-ỴĐ])","g"),(_,a,b)=>a+b+"❖");
+  return text;
+}
+
+function ensureCurriculumSymbolFontStyles(){
+  if(document.getElementById('doraemon-curriculum-symbol-fonts')) return;
+  const style=document.createElement('style'); style.id='doraemon-curriculum-symbol-fonts';
+  style.textContent='.chat-text,.curriculum-content{font-family:Segoe UI,Segoe UI Symbol,Noto Sans Symbols,Noto Sans Symbols 2,Arial Unicode MS,Arial,sans-serif}';
+  document.head.appendChild(style);
+}
+
 function sanitizeRichText(value, options = {}) {
   if (value == null || value === "") return "";
   const allowPipeTables = options.allowPipeTables !== false;
-  let src = decodeHtmlEntities(value).replace(/\r\n?/g, "\n");
+  let src = normalizeCurriculumBulletChars(decodeHtmlEntities(value)).replace(/\r\n?/g, "\n");
   // Pipe-separated text is auto-converted to a table only for normal chat.
   // Curriculum/exercise content must preserve the exact source text/HTML
   // because `|` can be a real separator inside an exercise passage, not a Markdown table.
@@ -1451,6 +1469,7 @@ async function renderSettings(el){
 }
 
 async function boot(){
+  ensureCurriculumSymbolFontStyles();
   initQrViewerEvents();
   ensureAuthExtras();
   $$("[data-close-modal]").forEach(x=>x.addEventListener("click",closeAuth));
