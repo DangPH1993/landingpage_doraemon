@@ -1,4 +1,4 @@
-// Doraemon Web Client v31.72 – forgot-password UI/action + mail-check feedback
+// Doraemon Web Client v71 – Chat Now + library filters/collapsible groups
 const API_BASE = (() => {
   const meta = document.querySelector('meta[name="doraemon-api-base"]');
   const configured = (window.DORAEMON_API_BASE || meta?.content || '').trim();
@@ -24,6 +24,7 @@ const state = {
   activeFeature: "",
   activeFeatureItem: null,
   freeChatTutor: false,
+  chatNow: false,
   phrasingTask: "",
   phrasingContext: [],
   __initAppPromise: null,
@@ -650,7 +651,8 @@ async function resetPassword(token, newPassword) {
   return data?.message || "Đổi mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới.";
 }
 
-function logout(showToast = true) {
+async function logout(showToast = true) {
+  if(state.chatNow) await endChatNowSession(true);
   stopAdminUnreadPolling();
   state.token = ""; state.profile = null; state.courses = []; state.chatHistory = []; state.messages = []; state.chatboxNew = true; state.showCollocationOnFirstChat = false; state.activeFeature = ""; state.activeFeatureItem = null; sessionStorage.removeItem("doraemon_features_shown_this_login");
   sessionStorage.removeItem("doraemon_collocation_shown_this_login");
@@ -765,13 +767,15 @@ function renderAppShell() {
     $("#learnerMenuBtn").setAttribute("aria-expanded", String(open));
   };
   $("#logoutBtn").onclick = () => logout();
-  $$('[data-panel]').forEach(btn => btn.addEventListener("click", () => {
+  $$('[data-panel]').forEach(btn => btn.addEventListener("click", async () => {
+    await exitChatNowBeforeSwitch();
     $("#learnerMenu")?.classList.add("hidden");
     $("#learnerMenuBtn")?.setAttribute("aria-expanded", "false");
     openLearnerPanel(btn.dataset.panel);
   }));
   startAdminUnreadPolling();
   $("#courseSelect")?.addEventListener("change", async e => {
+    await exitChatNowBeforeSwitch();
     const cid = e.target.value;
     if (!cid) return;
     try {
@@ -938,6 +942,7 @@ async function sendChat(prompt, imageBase64 = null, proactive = false, action = 
       selected_context: null,
       course_id: state.selectedCourseId ? Number(state.selectedCourseId) : null,
       free_chat_tutor: Boolean(state.freeChatTutor),
+      chat_now: Boolean(state.chatNow),
     };
     state.chatboxNew = false;
     const data = await api("/api/proxy-chat", {method:"POST", body:payload});
@@ -959,6 +964,57 @@ async function sendChat(prompt, imageBase64 = null, proactive = false, action = 
     bubble.blocks = [{type:"text",text:`${e.message}` }]; renderMessages();
   }
 }
+
+async function endChatNowSession(silent=true){
+  if(!state.chatNow || !state.chatboxId) return;
+  try{
+    await api("/learning/chat-now/end",{
+      method:"POST",
+      body:{
+        chatbox_id:state.chatboxId,
+        course_id:state.selectedCourseId ? Number(state.selectedCourseId) : null,
+        chat_history:state.chatHistory.slice(-20),
+      }
+    });
+  }catch(e){
+    if(!silent) toast(e.message || "Không thể kết thúc phiên Chat Now", "error");
+  }
+}
+
+function resetChatMode(){
+  state.chatNow=false;
+  state.freeChatTutor=false;
+  state.activeFeature="";
+  state.activeFeatureItem=null;
+  state.phrasingTask="";
+  state.phrasingContext=[];
+}
+
+async function launchChatNow(){
+  await endChatNowSession(true);
+  state.view="chat";
+  state.activeContentType="";
+  state.activeLesson="";
+  state.freeChatTutor=false;
+  state.activeFeature="";
+  state.activeFeatureItem=null;
+  state.chatNow=true;
+  state.phrasingTask="";
+  state.phrasingContext=[];
+  state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;
+  state.chatboxNew=true;
+  state.messages=[];
+  state.chatHistory=[];
+  await renderChat($("#appContent"));
+  await sendChat("Bắt đầu một phiên Chat Now. Hãy chủ động tạo một tình huống role-play vui vẻ.",null,false,null,null);
+}
+
+async function exitChatNowBeforeSwitch(){
+  if(!state.chatNow) return;
+  await endChatNowSession(true);
+  state.chatNow=false;
+}
+
 function featureKindLabel(kind){ return kind === "phrasal_verb" ? "Phrasal verb" : "Collocation"; }
 function featureEndpoint(kind, mode){ return `/learning/${kind === "phrasal_verb" ? "phrasal-verb" : "collocation"}/${mode}`; }
 function featureDataKey(kind){ return kind === "phrasal_verb" ? "phrasal_verb" : "collocation"; }
@@ -971,6 +1027,7 @@ function setFeatureHistory(item, kind){
   rememberChatTurn("model", `${label}: ${featureTerm(item, kind)}. Nghĩa: ${item.meaning || ""}. Ví dụ: ${item.example || ""}`);
 }
 async function showLearningFeature(kind){
+  await exitChatNowBeforeSwitch();
   state.view = "chat";
   state.activeContentType = "";
   state.activeLesson = "";
@@ -1083,7 +1140,7 @@ async function renderChat(el) {
   ensureStudyChatLayoutStyles();
   el.innerHTML = `<div class="study-grid">
     <aside class="study-library page-card"><div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">Đang học</span></div><button class="tutor-launch-card" id="freeTutorBtn"><span class="tutor-launch-avatar" aria-hidden="true"><img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy"></span><span class="tutor-launch-copy"><strong>Trò chuyện cùng gia sư</strong><small>Doraemon sẽ đồng hành và giúp cậu cải thiện những điểm còn yếu.</small></span><span class="tutor-launch-arrow">→</span></button><div class="study-library-list"><div class="loading">Đang tải nội dung…</div></div><div class="library-note">💡 Chọn bài để Doraemon mở đúng ngữ cảnh học. Trạng thái chi tiết của Giáo trình nằm trong menu <b>Thông tin người học → Giáo trình</b>.</div></aside>
-    <section class="chat-panel page-card"><div class="chat-toolbar"><div class="chat-toolbar-copy"><span class="section-label">PHIÊN HỌC</span><strong>Học cùng Doraemon</strong><small>Doraemon hướng dẫn, giải thích, đặt câu hỏi và phản hồi ngay trong cùng một phòng học.</small></div><div class="chat-toolbar-actions"><button class="feature-launch-button" id="collocationBtn">Collocation</button><button class="feature-launch-button" id="phrasalVerbBtn">Phrasal verb</button><button class="feature-launch-button" id="phrasingBtn">Phrasing</button><button class="small-button" id="newChatBtn">＋ Phiên mới</button></div></div><div class="chat-messages" id="chatMessages"></div><div class="chat-composer"><textarea id="chatInput" rows="1" placeholder="Hỏi Doraemon hoặc trả lời câu hỏi…"></textarea><button class="send-button" id="sendBtn" aria-label="Gửi tin nhắn">➤</button></div><div class="composer-hint">Enter để gửi · Shift+Enter để xuống dòng · Có thể dán ảnh bài tập vào ô chat</div></section>
+    <section class="chat-panel page-card"><div class="chat-toolbar"><div class="chat-toolbar-copy"><span class="section-label">${state.chatNow?'CHAT NOW':'PHIÊN HỌC'}</span><strong>${state.chatNow?'Chat now':'Học cùng Doraemon'}</strong><small>${state.chatNow?'Trò chuyện bằng ngoại ngữ trong một tình huống giả định vui vẻ; Doraemon vẫn sửa lỗi tự nhiên khi cậu viết sai.':'Doraemon hướng dẫn, giải thích, đặt câu hỏi và phản hồi ngay trong cùng một phòng học.'}</small></div><div class="chat-toolbar-actions"><button class="feature-launch-button chat-now-button" id="chatNowBtn">Chat now</button><button class="feature-launch-button" id="collocationBtn">Collocation</button><button class="feature-launch-button" id="phrasalVerbBtn">Phrasal verb</button><button class="feature-launch-button" id="phrasingBtn">Phrasing</button><button class="small-button" id="newChatBtn">＋ ${state.chatNow?'Phiên Chat Now mới':'Phiên mới'}</button></div></div><div class="chat-messages" id="chatMessages"></div><div class="chat-composer"><textarea id="chatInput" rows="1" placeholder="Hỏi Doraemon hoặc trả lời câu hỏi…"></textarea><button class="send-button" id="sendBtn" aria-label="Gửi tin nhắn">➤</button></div><div class="composer-hint">Enter để gửi · Shift+Enter để xuống dòng · Có thể dán ảnh bài tập vào ô chat</div></section>
   </div>`;
   try {
     const [catalog, summary] = await Promise.all([
@@ -1114,33 +1171,38 @@ async function renderChat(el) {
     const typeOrder=["Giáo trình","Từ vựng","Ngữ pháp","Bài tập","Luyện viết","Truyện đọc"];
     const types=[...typeOrder.filter(t=>grouped[t]?.length),...Object.keys(grouped).filter(x=>!typeOrder.includes(x))];
     const cardRows=[];
-    const sections=types.filter(t=>grouped[t]?.length).map(t=>`<div class="lesson-section" data-section-type="${escapeHtml(t)}"><div class="lesson-section-head"><span>${iconType(t)} ${escapeHtml(t)}</span><small class="lesson-section-count">${new Set(grouped[t].map(x=>`${x.lesson}|${x.topic||""}`)).size} bài</small></div>${uniqRows(grouped[t]).slice(0,30).map(r=>{
+    const sections=types.filter(t=>grouped[t]?.length).map(t=>`<div class="lesson-section" data-section-type="${escapeHtml(t)}"><div class="lesson-section-head"><button type="button" class="lesson-section-toggle" aria-expanded="false" title="Mở/đóng nhóm">▸</button><span>${iconType(t)} ${escapeHtml(t)}</span><small class="lesson-section-count">${new Set(grouped[t].map(x=>`${x.lesson}|${x.topic||""}`)).size} bài</small></div><div class="lesson-section-body">${uniqRows(grouped[t]).slice(0,30).map(r=>{
       const actualType=String(r.content_type||t).trim();
       const key=`${r.course_id!=null?String(r.course_id):""}|${actualType.toLocaleLowerCase("vi-VN")}|${String(r.lesson||"").trim().toLocaleLowerCase("vi-VN")}|${String(r.topic||"").trim().toLocaleLowerCase("vi-VN")}`;
       const st=lessonStatus(progressMap.get(key));
       cardRows.push({type:actualType,status:st.cls});
       const locked=Boolean(r.locked);
       return `<button class="lesson-card compact ${locked?'locked':''}" data-lesson="${escapeHtml(r.lesson)}" data-type="${escapeHtml(actualType)}" data-topic="${escapeHtml(r.topic||"")}" data-status="${escapeHtml(st.cls)}" data-locked="${locked?'1':'0'}" ${locked?'aria-disabled="true"':''} style="${locked?'opacity:.58;cursor:not-allowed;':''}"><div class="lesson-card-copy"><strong>${escapeHtml(r.lesson)}</strong>${r.topic?`<small>${escapeHtml(r.topic)}</small>`:""}</div><span class="lesson-status-tag ${locked?'not-started':st.cls}">${locked?'🔒 Đã khóa':st.label}</span><span class="lesson-card-open">${locked?'🔒':'Học →'}</span></button>`;
-    }).join("")}</div>`).join("");
+    }).join("")}</div></div>`).join("");
     ensureLibraryFilterStyles();
     const typeFilterOptions=types.map(t=>`<label class="library-filter-option"><input type="checkbox" value="${escapeHtml(t)}"> <span>${escapeHtml(t)}</span></label>`).join("");
     const statusOptions=[
       ["not-started","Chưa học"],
       ["in-progress","Đang học dở"],
       ["completed","Đã học"]
-    ].map(([value,label])=>`<label class="library-filter-option"><input type="checkbox" value="${escapeHtml(value)}"> <span>${escapeHtml(label)}</span></label>`).join("");
-    const makeMultiFilter=(id,label,allLabel,options)=>`<div class="library-filter"><label>${escapeHtml(label)}</label><div class="library-filter-multi" id="${id}" data-filter-key="${id.includes("Type")?"type":"status"}"><button type="button" class="library-filter-trigger" aria-haspopup="listbox" aria-expanded="false"><span class="library-filter-label">Tất cả</span><span class="library-filter-chevron">▾</span></button><div class="library-filter-menu" role="listbox"><label class="library-filter-option all-option"><input type="checkbox" value="" checked> <span>${escapeHtml(allLabel)}</span></label>${options}</div></div></div>`;
-    const libraryHtml = `<div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">${docs.length} mục</span></div><button class="tutor-launch-card" id="freeTutorBtn"><span class="tutor-launch-avatar" aria-hidden="true"><img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy"></span><span class="tutor-launch-copy"><strong>Trò chuyện cùng gia sư</strong><small>Doraemon sẽ đồng hành và giúp cậu cải thiện những điểm còn yếu.</small></span><span class="tutor-launch-arrow">→</span></button><div class="library-filters">${makeMultiFilter("libraryTypeFilter","Loại nội dung","Tất cả loại nội dung",typeFilterOptions)}${makeMultiFilter("libraryStatusFilter","Trạng thái học","Tất cả trạng thái",statusOptions)}</div><div class="study-library-list">${sections || `<div class="empty-state">Chưa có nội dung được cấp quyền.</div>`}<div id="libraryFilterEmpty" class="library-filter-empty" style="display:none">Không có bài nào khớp với bộ lọc hiện tại.</div></div><div class="library-note">💡 Chọn bài để Doraemon mở đúng ngữ cảnh học. Dùng bộ lọc phía trên để tìm nhanh theo loại nội dung hoặc trạng thái học.</div>`;
+    ].map(([value,label])=>`<label class="library-filter-option"><input type="checkbox" value="${escapeHtml(value)}" ${["not-started","in-progress"].includes(value)?"checked":""}> <span>${escapeHtml(label)}</span></label>`).join("");
+    const makeMultiFilter=(id,label,allLabel,options,defaults=[])=>{const allChecked=!defaults.length; return `<div class="library-filter"><label>${escapeHtml(label)}</label><div class="library-filter-multi" id="${id}" data-filter-key="${id.includes("Type")?"type":"status"}><button type="button" class="library-filter-trigger" aria-haspopup="listbox" aria-expanded="false"><span class="library-filter-label">${allChecked?"Tất cả":`${defaults.length} đã chọn`}</span><span class="library-filter-chevron">▾</span></button><div class="library-filter-menu" role="listbox"><label class="library-filter-option all-option"><input type="checkbox" value="" ${allChecked?"checked":""}> <span>${escapeHtml(allLabel)}</span></label>${options}</div></div></div>`;};
+    const libraryHtml = `<div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">${docs.length} mục</span></div><button class="tutor-launch-card" id="freeTutorBtn"><span class="tutor-launch-avatar" aria-hidden="true"><img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy"></span><span class="tutor-launch-copy"><strong>Trò chuyện cùng gia sư</strong><small>Doraemon sẽ đồng hành và giúp cậu cải thiện những điểm còn yếu.</small></span><span class="tutor-launch-arrow">→</span></button><div class="library-filters">${makeMultiFilter("libraryTypeFilter","Loại nội dung","Tất cả loại nội dung",typeFilterOptions)}${makeMultiFilter("libraryStatusFilter","Trạng thái học","Tất cả trạng thái",statusOptions,["not-started","in-progress"])}</div><div class="study-library-list">${sections || `<div class="empty-state">Chưa có nội dung được cấp quyền.</div>`}<div id="libraryFilterEmpty" class="library-filter-empty" style="display:none">Không có bài nào khớp với bộ lọc hiện tại.</div></div><div class="library-note">💡 Chọn bài để Doraemon mở đúng ngữ cảnh học. Dùng bộ lọc phía trên để tìm nhanh theo loại nội dung hoặc trạng thái học.</div>`;
     $(".study-library").innerHTML=libraryHtml;
   } catch (e) {
     $(".study-library").innerHTML = `<div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div></div><div class="study-library-list"><div class="empty-state error">${escapeHtml(e.message)}</div></div>`;
   }
   renderMessages();
+  $("#chatNowBtn").onclick = () => launchChatNow();
   $("#collocationBtn").onclick = () => showLearningFeature("collocation");
   $("#phrasalVerbBtn").onclick = () => showLearningFeature("phrasal_verb");
   $("#phrasingBtn").onclick = () => launchPhrasing();
-  $("#newChatBtn").onclick = () => { state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`; state.chatboxNew=true; state.messages=[]; state.chatHistory=[]; state.activeContentType=""; state.activeLesson=""; state.activeFeature=""; state.activeFeatureItem=null; state.freeChatTutor=false; state.phrasingTask=""; state.phrasingContext=[]; startWelcome(); };
+  $("#newChatBtn").onclick = async () => {
+    if(state.chatNow){ await launchChatNow(); return; }
+    state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`; state.chatboxNew=true; state.messages=[]; state.chatHistory=[]; state.activeContentType=""; state.activeLesson=""; state.activeFeature=""; state.activeFeatureItem=null; state.freeChatTutor=false; state.chatNow=false; state.phrasingTask=""; state.phrasingContext=[]; startWelcome();
+  };
   const launchTutor = async () => {
+    await exitChatNowBeforeSwitch();
     state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;
     state.chatboxNew=true; state.messages=[]; state.chatHistory=[];
     state.activeContentType=""; state.activeLesson=""; state.activeFeature=""; state.activeFeatureItem=null; state.freeChatTutor=true;
@@ -1183,6 +1245,14 @@ async function renderChat(el) {
   };
   setupMultiFilter(typeFilter);
   setupMultiFilter(statusFilter);
+  $$(".lesson-section-toggle", $(".study-library")).forEach(btn=>btn.addEventListener("click",e=>{
+    e.stopPropagation();
+    const section=btn.closest(".lesson-section");
+    if(!section)return;
+    const expanded=section.classList.toggle("expanded");
+    btn.setAttribute("aria-expanded",expanded?"true":"false");
+    btn.textContent=expanded?"▾":"▸";
+  }));
   const closeLibraryFilters=(e)=>{
     if(e.target.closest(".library-filter-multi")) return;
     $$(".library-filter-multi.open").forEach(control=>{
@@ -1234,6 +1304,7 @@ function uniqRows(rows){const seen=new Set();return rows.filter(r=>{const k=`${r
 function iconType(t){return ({"Giáo trình":"📖","Từ vựng":"🧠","Ngữ pháp":"✏️","Bài tập":"📝","Luyện viết":"✍️","Truyện đọc":"📚","Collocation":"💡","Phrasal verb":"🔗"})[t]||"📄";}
 function encodeLessonScope(scope){const raw=JSON.stringify(scope);const bytes=encodeURIComponent(raw).replace(/%([0-9A-F]{2})/g,(_,h)=>String.fromCharCode(parseInt(h,16)));return btoa(bytes).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");}
 async function startLesson(lesson,type,topic=""){
+  await exitChatNowBeforeSwitch();
   state.view="chat";
   state.activeContentType = String(type || "Giáo trình").trim();
   state.activeLesson = String(lesson || "").trim();
@@ -1323,6 +1394,7 @@ function phrasingResetState(){
 }
 
 async function launchPhrasing(options={}){
+  await exitChatNowBeforeSwitch();
   // Phrasing is a dedicated feature session. Keep the five most recent chat turns
   // only as context for the server-generated task, then reset the visible session.
   const incomingContext = Array.isArray(options.context)
@@ -1385,7 +1457,7 @@ async function startNextPhrasing(){
   await launchPhrasing({context});
 }
 
-async function startReviewChat(){closeLearnerPanel();state.view="chat";state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;state.chatboxNew=true;state.messages=[];state.chatHistory=[];state.activeFeature="";state.activeFeatureItem=null;await renderChat($("#appContent"));await sendAction("review_open","Mở nội dung ôn tập");}
+async function startReviewChat(){await exitChatNowBeforeSwitch();closeLearnerPanel();state.view="chat";state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;state.chatboxNew=true;state.messages=[];state.chatHistory=[];state.activeFeature="";state.activeFeatureItem=null;await renderChat($("#appContent"));await sendAction("review_open","Mở nội dung ôn tập");}
 
 async function notifyAdminPackage(code){
   const message=String(code||"").trim();
