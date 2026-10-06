@@ -279,14 +279,34 @@ function resolveMediaUrl(raw){
 function normalizeCurriculumBulletChars(value){
   let text=String(value??"");
   if(!text)return "";
-  const prefix=/(^|>|\n|\r)(\s*)/;
-  const mappings={"\uF0B7":"•","\uF0D8":"➢","\uF0D9":"➢","\uF0DA":"➢","\uF0DB":"➢","\uF0A7":"❖","\uF076":"❖","\uF0FC":"✓","\uF0D0":"◆"};
-  for(const [src,dst] of Object.entries(mappings)) text=text.replace(new RegExp(prefix.source+src+"(?=\\s)","g"),(_,a,b)=>a+b+dst);
-  text=text.replace(new RegExp(prefix.source+"¾(?=\\s+[A-ZÀ-ỴĐ])","g"),(_,a,b)=>a+b+"➢");
-  text=text.replace(new RegExp(prefix.source+"□(?=\\s+[A-ZÀ-ỴĐ])","g"),(_,a,b)=>a+b+"❖");
+  const prefix=/(^|>|\n|\r)([ \t]*)/;
+  const mappings={
+    "\uF0B7":"•","\uF0D8":"➢","\uF0D9":"➢","\uF0DA":"➢","\uF0DB":"➢",
+    "\uF0A7":"•","\uF076":"•","\uF0FC":"✓","\uF0D0":"•",
+    "\uF0A8":"•","\uF0A9":"•","\uF0AA":"•","\uF0AB":"•",
+    "\uF0B0":"•","\uF0B1":"•","\uF0B2":"•","\uF0B3":"•",
+    "\uF0B4":"•","\uF0B5":"•","\uF0B6":"•","\uF0B8":"•",
+    "\uF0B9":"•","\uF0BA":"•","\uF0BB":"•","\uF0BC":"•",
+    "\uF0BD":"•","\uF0BE":"•","\uF0BF":"•","\uF0C0":"•",
+    "\uF0C1":"•","\uF0C2":"•","\uF0C3":"•","\uF0C4":"•",
+    "\uF0E0":"•","\uF0E5":"•","\uF0E6":"•","\uF0E7":"•"
+  };
+  for(const [src,dst] of Object.entries(mappings)) text=text.replace(new RegExp(prefix.source+src+"([ \t])","g"),(_,a,b,sp)=>a+b+dst+sp);
+  const chars=Array.from(text);
+  for(let i=0;i<chars.length;i++){
+    const atBlockStart=i===0||chars[i-1]==='\n'||chars[i-1]==='\r'||chars[i-1]==='>';
+    if(!atBlockStart)continue;
+    let j=i; while(j<chars.length&&(chars[j]===' '||chars[j]==='\t'))j++;
+    const cp=j<chars.length?chars[j].codePointAt(0):0;
+    if(cp>=0xE000&&cp<=0xF8FF&&j+1<chars.length&&(chars[j+1]===' '||chars[j+1]==='\t'))chars[j]='•';
+    if(j<chars.length&&'□▫▪◻◽◾◼■�'.includes(chars[j])&&j+1<chars.length&&(chars[j+1]===' '||chars[j+1]==='\t'))chars[j]='•';
+  }
+  text=chars.join('');
+  text=text.replace(new RegExp(prefix.source+"¾([ \t]+)(?!cup\b|cups\b|lb\b|lbs\b|oz\b)([A-ZÀ-ỴĐ])","g"),(_,a,b,sp,c)=>a+b+"➢"+sp+c);
+  const mojibake={"â€¢":"•","â–º":"➢","âž¢":"➢","â—†":"•","â˜…":"•","Â·":"•","Â»":"•"};
+  for(const [src,dst] of Object.entries(mojibake)) text=text.replace(new RegExp(prefix.source+src+"([ \t])","g"),(_,a,b,sp)=>a+b+dst+sp);
   return text;
 }
-
 function ensureCurriculumSymbolFontStyles(){
   if(document.getElementById('doraemon-curriculum-symbol-fonts')) return;
   const style=document.createElement('style'); style.id='doraemon-curriculum-symbol-fonts';
