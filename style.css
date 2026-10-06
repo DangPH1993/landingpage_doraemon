@@ -1689,6 +1689,7 @@ button,input,textarea,select{font-family:var(--font-sans)!important;}
 .lesson-section-toggle:hover{background:#eef4ff;color:#2563eb}
 .lesson-section-body{display:none}
 .lesson-section.expanded .lesson-section-body{display:block}
-.chat-now-button{border-color:#9bb9ff!important;background:linear-gradient(135deg,#edf4ff,#f5f0ff)!important;color:#3158d5!important;font-weight:850!important}
-.chat-now-button:hover{border-color:#718fff!important;background:linear-gradient(135deg,#e5efff,#eee8ff)!important}
+.chat-now-button{border-color:#f59e0b!important;background:linear-gradient(135deg,#ffedd5,#f59e0b)!important;color:#7c2d12!important;font-weight:900!important;box-shadow:0 6px 16px rgba(245,158,11,.28)!important}
+.chat-now-button:hover{border-color:#ea580c!important;background:linear-gradient(135deg,#fed7aa,#fb923c)!important;color:#7c2d12!important;box-shadow:0 8px 20px rgba(245,158,11,.36)!important;transform:translateY(-1px)}
+.chat-now-button:active{transform:translateY(0)}
 @media(max-width:720px){.lesson-section-head{grid-template-columns:22px minmax(0,1fr) auto}.chat-toolbar-actions{padding-bottom:4px}}
