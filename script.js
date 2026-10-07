@@ -662,6 +662,34 @@ async function logout(showToast = true) {
   location.hash = "#";
 }
 
+let appDownloadConfigLoaded = false;
+
+async function loadAppDownloadConfig() {
+  const button = $("#appDownloadBtn");
+  if (!button || appDownloadConfigLoaded) return;
+  try {
+    const data = await api("/public/config");
+    const url = String(data?.app_download_url || "").trim();
+    if (url) {
+      button.href = url;
+      button.removeAttribute("aria-disabled");
+      button.removeAttribute("title");
+      button.dataset.configured = "true";
+    } else {
+      button.href = "#";
+      button.setAttribute("aria-disabled", "true");
+      button.title = "Chưa cấu hình link tải ứng dụng.";
+    }
+  } catch (err) {
+    console.warn("[APP DOWNLOAD CONFIG] unable to load public app download URL:", err);
+    button.href = "#";
+    button.setAttribute("aria-disabled", "true");
+    button.title = "Chưa lấy được link tải ứng dụng.";
+  } finally {
+    appDownloadConfigLoaded = true;
+  }
+}
+
 function renderLanding() {
   landingView.classList.remove("hidden");
   appView.classList.add("hidden");
@@ -1584,6 +1612,7 @@ async function boot(){
   $$("[data-auth-mode]").forEach(x=>x.addEventListener("click",()=>setAuthMode(x.dataset.authMode)));
   $("#navAuthBtn").onclick=()=>state.token?location.hash="#/app":openAuth("login");
   $("#heroAuthBtn").onclick=()=>openAuth("register");
+  loadAppDownloadConfig();
   authForm.addEventListener("submit",async e=>{
     e.preventDefault();
     const mode=authForm.dataset.mode||"login";
