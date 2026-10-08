@@ -1,4 +1,4 @@
-// Doraemon Web Client v82 – Forum own edit/delete + long-post preview
+// Doraemon Web Client v84 – Forum unread-new-post indicator
 const API_BASE = (() => {
   const meta = document.querySelector('meta[name="doraemon-api-base"]');
   const configured = (window.DORAEMON_API_BASE || meta?.content || '').trim();
@@ -33,6 +33,8 @@ const state = {
   forumOpenPostId: null,
   forumComments: {},
   forumUnreadCount: 0,
+  forumNewPostCount: 0,
+  forumLastSeenPostId: Number(localStorage.getItem("doraemon_forum_last_seen_post_id") || 0) || 0,
   forumEditingPostId: null,
   forumExpandedPostContentIds: {},
 };
@@ -795,6 +797,9 @@ function ensureForumStyles(){
     .forum-collapsed .forum-collapse-btn{transform:rotate(180deg)}
     .forum-notify-badge{position:absolute;right:-4px;top:-5px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;font-size:9px;font-weight:900;display:grid;place-items:center;border:2px solid #fff;line-height:1}
     .forum-notify-badge.hidden{display:none}
+    .forum-new-post-badge{position:absolute;right:-3px;top:-3px;width:9px;height:9px;border-radius:50%;background:#ef4444;border:2px solid #fff;box-sizing:content-box;box-shadow:0 0 0 2px rgba(239,68,68,.10)}
+    .forum-new-post-badge.hidden{display:none}
+    .forum-new-post-button{font-size:16px}
     .forum-body{display:flex;flex-direction:column;min-height:0;flex:1}
     .forum-list-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid #edf1f5;background:#fff;flex:none}
     .forum-list-title{font-size:10px;font-weight:900;color:#728198;text-transform:uppercase;letter-spacing:.03em}
@@ -924,6 +929,34 @@ function bindForumEmojiButtons(root){
   }));
 }
 
+async function renderForumNewPostBadge(){
+  const badge=$("#forumNewPostBadge");
+  if(!badge) return;
+  const count=forumSanitizedCount(state.forumNewPostCount);
+  badge.classList.toggle("hidden",count<1);
+  badge.title=count?`${count} bài đăng mới chưa xem`:"";
+  badge.setAttribute("aria-hidden",count?"false":"true");
+}
+
+function updateForumNewPostState(posts, markSeen=false){
+  const list=Array.isArray(posts)?posts:[];
+  const latest=list.reduce((max,p)=>Math.max(max,Number(p?.id)||0),0);
+  const lastSeen=Number(state.forumLastSeenPostId)||0;
+  if(!lastSeen && latest){
+    state.forumLastSeenPostId=latest;
+    state.forumNewPostCount=0;
+    localStorage.setItem("doraemon_forum_last_seen_post_id",String(latest));
+  }else{
+    state.forumNewPostCount=list.filter(p=>(Number(p?.id)||0)>lastSeen).length;
+  }
+  if(markSeen && latest){
+    state.forumLastSeenPostId=latest;
+    state.forumNewPostCount=0;
+    localStorage.setItem("doraemon_forum_last_seen_post_id",String(latest));
+  }
+  renderForumNewPostBadge();
+}
+
 async function refreshForumNotificationCount(){
   if(!state.token) return;
   try{
@@ -974,6 +1007,7 @@ function renderForumStrip(){
     <header class="forum-head">
       <div class="forum-head-copy"><strong>Forum cộng đồng</strong><small>@${escapeHtml(forumCurrentUsername())}</small></div>
       <div class="forum-head-actions">
+        <button class="forum-icon-button forum-new-post-button" type="button" id="forumNewPostBtn" aria-label="Bài đăng mới chưa xem">📝<span id="forumNewPostBadge" class="forum-new-post-badge hidden"></span></button>
         <button class="forum-icon-button" type="button" id="forumBellBtn" aria-label="Thông báo forum">🔔<span id="forumUnreadBadge" class="forum-notify-badge hidden"></span></button>
         <button class="forum-icon-button forum-collapse-btn" type="button" id="forumCollapseBtn" aria-label="Mở/đóng Forum">›</button>
       </div>
@@ -996,7 +1030,11 @@ function renderForumStrip(){
   $("#forumCollapseBtn").onclick=async()=>{
     state.forumExpanded=!state.forumExpanded;
     renderForumStrip();
-    if(state.forumExpanded){await loadForumPosts(); await refreshForumNotificationCount();}
+    if(state.forumExpanded){await loadForumPosts(true); await refreshForumNotificationCount();}
+  };
+  $("#forumNewPostBtn").onclick=async()=>{
+    if(!state.forumExpanded){state.forumExpanded=true;renderForumStrip();}
+    await loadForumPosts(true);
   };
   $("#forumBellBtn").onclick=async()=>{
     if(!state.forumExpanded){state.forumExpanded=true;renderForumStrip();await loadForumPosts();}
@@ -1011,7 +1049,7 @@ function renderForumStrip(){
   renderForumNotificationLine();
 }
 
-async function loadForumPosts(){
+async function loadForumPosts(markSeen=false){
   const box=$("#forumPosts");
   if(!box) return;
   box.innerHTML=`<div class="forum-loading">Đang tải bài viết…</div>`;
@@ -1019,6 +1057,7 @@ async function loadForumPosts(){
     const d=await api("/forum/posts?limit=20");
     state.forumPosts=Array.isArray(d?.posts)?d.posts:[];
     renderForumPosts();
+    updateForumNewPostState(state.forumPosts,markSeen);
   }catch(e){box.innerHTML=`<div class="forum-empty">Không tải được Forum.<br>${escapeHtml(e.message||"")}</div>`;}
 }
 
@@ -1193,7 +1232,9 @@ async function createForumComment(postId){
 }
 
 function startForumPolling(){
-  // Intentionally no interval polling: Forum loads on page load and when expanded.
+  // No interval polling. Load once when the learner view starts so the compact
+  // strip can show an unread-new-post indicator without causing panel flicker.
+  loadForumPosts(false);
   refreshForumNotificationCount();
 }
 function stopForumPolling(){}
