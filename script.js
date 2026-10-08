@@ -28,6 +28,11 @@ const state = {
   phrasingTask: "",
   phrasingContext: [],
   __initAppPromise: null,
+  forumExpanded: false,
+  forumPosts: [],
+  forumOpenPostId: null,
+  forumComments: {},
+  forumUnreadCount: 0,
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -654,6 +659,7 @@ async function resetPassword(token, newPassword) {
 async function logout(showToast = true) {
   if(state.chatNow) await endChatNowSession(true);
   stopAdminUnreadPolling();
+  stopForumPolling();
   state.token = ""; state.profile = null; state.courses = []; state.chatHistory = []; state.messages = []; state.chatboxNew = true; state.showCollocationOnFirstChat = false; state.activeFeature = ""; state.activeFeatureItem = null; sessionStorage.removeItem("doraemon_features_shown_this_login");
   sessionStorage.removeItem("doraemon_collocation_shown_this_login");
   sessionStorage.removeItem("doraemon_phrasal_verb_shown_this_login");
@@ -752,6 +758,344 @@ function stopAdminUnreadPolling(){
   window.__adminUnreadPoll=null;
 }
 
+
+// -----------------------------------------------------------------------------
+// Forum strip: lightweight text-only community panel.
+// No images/files are stored. Emoji are Unicode characters rendered by the OS.
+// -----------------------------------------------------------------------------
+const FORUM_EMOJI_GROUPS = {
+  "😀": "😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 🙃 😉 😌 😍 🥰 😘 😗 😙 😚 😋 😛 😝 😜 🤪 🤨 🧐 🤓 😎 🤩 🥳 🤗 🤔 🫡 🤭 🤫 🤥 😶 😐 😑 😬 🙄 😏 😣 😥 😮 🤐 😯 😪 😫 🥱 😴 😌 🤤 😓 😔 😕 🙃 🫠 🙁 ☹️ 😖 😞 😟 😤 😢 😭 😦 😧 😨 😩 🤯 😬 😰 😱 😳 🤪 😵‍💫 🥶 🥵 🤢 🤮 🤧 😷 🤒 🤕",
+  "👍": "👍 👎 👌 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ ✋ 🤚 🖐️ 🖖 👋 🤏 💪 🙏 👏 🙌 🫶 🤝 👊 ✊ 🤌 🫰 💯 👀 🧠 💡 🔥 ⭐ 🌟 ✨ 🎉 🎊 ✅ ❌ ⚡ 💬 💭",
+  "🐶": "🐶 🐱 🐭 🐹 🐰 🦊 🐻 🐼 🐨 🐯 🦁 🐮 🐷 🐸 🐵 🐙 🦄 🐝 🦋 🐌 🐞 🐢 🐍 🦎 🐳 🐬 🦈 🐠 🐟 🐊 🦜 🐦 🐧 🦉 🦅 🐺",
+  "🍔": "🍏 🍎 🍐 🍊 🍋 🍌 🍉 🍇 🍓 🫐 🍒 🍑 🥭 🍍 🥝 🍅 🥑 🍕 🍔 🍟 🌭 🌮 🌯 🍿 🍜 🍝 🍣 🍱 🍛 🍚 🍙 🍪 🍩 🍰 🎂 🍫 🍬 🍭 ☕ 🧋 🍵",
+  "⚽": "⚽ 🏀 🏈 ⚾ 🎾 🏐 🏉 🥏 🎱 🏓 🏸 🥅 🏒 ⛳ 🏹 🎯 🛹 🛴 🚲 🏃 🏋️ 🤸 🧘 🚀 ✈️ 🚗 🏖️ 🗺️ 🎒 📚 🎓",
+  "❤️": "❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❤️‍🔥 ❤️‍🩹 💕 💞 💓 💗 💖 💘 💝 💟 ❣️ 💌 💋 ☀️ 🌈 🌙 🌸 🌻 🌹 🍀 🌱 🌍 🎶 🎵"
+};
+
+function ensureForumStyles(){
+  if(document.getElementById("doraemon-forum-styles")) return;
+  const style=document.createElement("style");
+  style.id="doraemon-forum-styles";
+  style.textContent=`
+    .forum-strip{position:fixed;right:14px;top:112px;bottom:18px;width:352px;z-index:85;display:flex;flex-direction:column;background:rgba(255,255,255,.98);border:1px solid #dfe7f0;border-radius:18px;box-shadow:0 20px 55px rgba(24,45,76,.16);overflow:hidden;transition:width .2s ease,box-shadow .2s ease}
+    .forum-strip.forum-collapsed{width:52px;height:152px;bottom:auto;top:180px;border-radius:16px 0 0 16px;right:0;box-shadow:0 12px 30px rgba(24,45,76,.14)}
+    .forum-collapsed .forum-body{display:none}
+    .forum-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 13px;border-bottom:1px solid #edf1f5;background:#fbfdff;flex:none}
+    .forum-head-copy{min-width:0;display:flex;flex-direction:column}
+    .forum-head-copy strong{font-size:14px;color:#24354f}
+    .forum-head-copy small{font-size:9px;color:#8a98aa;margin-top:2px}
+    .forum-head-actions{display:flex;align-items:center;gap:5px}
+    .forum-icon-button{width:30px;height:30px;border:1px solid #dce5ef;background:#fff;border-radius:9px;display:grid;place-items:center;cursor:pointer;color:#435a78;position:relative}
+    .forum-icon-button:hover{background:#f4f8fc;border-color:#c9d8e7}
+    .forum-collapsed .forum-head{height:100%;padding:8px 6px;border:0;background:linear-gradient(180deg,#fbfdff,#f4f8ff);display:flex;flex-direction:column;justify-content:center}
+    .forum-collapsed .forum-head-copy{display:none}
+    .forum-collapsed .forum-head-actions{flex-direction:column;gap:8px}
+    .forum-collapsed .forum-collapse-btn{transform:rotate(180deg)}
+    .forum-notify-badge{position:absolute;right:-4px;top:-5px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;font-size:9px;font-weight:900;display:grid;place-items:center;border:2px solid #fff;line-height:1}
+    .forum-notify-badge.hidden{display:none}
+    .forum-body{display:flex;flex-direction:column;min-height:0;flex:1}
+    .forum-compose{padding:10px;border-bottom:1px solid #edf1f5;background:#fff;display:grid;gap:7px}
+    .forum-compose input,.forum-compose textarea,.forum-comment-input{width:100%;border:1px solid #dfe7f0;border-radius:10px;background:#fbfdff;outline:none;color:#26364f;font-size:12px}
+    .forum-compose input{padding:9px 10px;font-weight:800}
+    .forum-compose textarea{padding:9px 10px;resize:vertical;min-height:62px;max-height:150px;line-height:1.45}
+    .forum-compose input:focus,.forum-compose textarea:focus,.forum-comment-input:focus{border-color:#9db8ee;box-shadow:0 0 0 3px rgba(79,70,229,.07)}
+    .forum-compose-row{display:flex;align-items:center;justify-content:space-between;gap:6px}
+    .forum-compose-hint{font-size:9px;color:#93a0b0}
+    .forum-primary-btn{border:0;border-radius:10px;padding:8px 11px;background:#edf4ff;color:#2455bf;font-size:11px;font-weight:900;cursor:pointer}
+    .forum-primary-btn:hover{background:#e3eeff}
+    .forum-posts{flex:1;overflow:auto;padding:9px;background:#f8fbff;display:grid;align-content:start;gap:8px}
+    .forum-post-card{background:#fff;border:1px solid #e0e7ef;border-radius:13px;padding:10px 11px;box-shadow:0 5px 15px rgba(31,51,79,.035)}
+    .forum-post-card:hover{border-color:#c8d8ea}
+    .forum-post-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+    .forum-post-title{font-size:13px;font-weight:900;color:#1e2f48;line-height:1.35;overflow-wrap:anywhere}
+    .forum-post-meta{margin-top:3px;font-size:9px;color:#8b99a9}
+    .forum-post-content{margin:8px 0 7px;font-size:11px;color:#43536a;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+    .forum-post-footer{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .forum-comment-link{border:0;background:transparent;color:#3563c7;font-size:10px;font-weight:800;padding:3px 0;cursor:pointer}
+    .forum-comment-link:hover{text-decoration:underline}
+    .forum-own-label{font-size:9px;color:#94a3b8}
+    .forum-comments{margin-top:8px;padding-top:8px;border-top:1px dashed #e3eaf2;display:grid;gap:7px}
+    .forum-comment{padding:7px 8px;border-radius:9px;background:#f7faff;border:1px solid #e6edf5}
+    .forum-comment-author{font-size:9px;font-weight:900;color:#3d5f99}
+    .forum-comment-text{margin-top:3px;font-size:10px;line-height:1.5;color:#45556a;white-space:pre-wrap;overflow-wrap:anywhere}
+    .forum-comment-date{display:block;margin-top:4px;font-size:8px;color:#9aa7b7}
+    .forum-comment-compose{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:end;margin-top:2px}
+    .forum-comment-input{min-height:44px;max-height:100px;resize:vertical;padding:8px;line-height:1.4}
+    .forum-send-btn{width:34px;height:34px;border:0;border-radius:9px;background:#eaf1ff;color:#2e5ac7;font-weight:900;cursor:pointer}
+    .forum-emoji-wrap{position:relative;display:grid;gap:5px}
+    .forum-emoji-toolbar{display:flex;justify-content:flex-end;gap:4px}
+    .forum-emoji-btn{border:1px solid #dfe7ef;background:#fff;border-radius:8px;padding:4px 7px;cursor:pointer;font-size:14px;line-height:1}
+    .forum-emoji-picker{position:absolute;right:0;bottom:38px;width:285px;max-height:250px;background:#fff;border:1px solid #dae4ef;border-radius:14px;box-shadow:0 18px 40px rgba(20,41,72,.18);padding:8px;display:none;z-index:20}
+    .forum-emoji-picker.open{display:block}
+    .forum-emoji-tabs{display:flex;gap:4px;overflow:auto;padding-bottom:6px;border-bottom:1px solid #eef2f6}
+    .forum-emoji-tab{flex:0 0 30px;height:27px;border:0;border-radius:7px;background:#f4f7fb;cursor:pointer;font-size:13px}
+    .forum-emoji-tab.active{background:#eaf1ff}
+    .forum-emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;padding-top:6px;max-height:190px;overflow:auto}
+    .forum-emoji-item{border:0;background:transparent;border-radius:7px;aspect-ratio:1/1;cursor:pointer;font-size:20px;display:grid;place-items:center}
+    .forum-emoji-item:hover{background:#f1f5fa}
+    .forum-notification-line{padding:8px 10px;border-bottom:1px solid #edf2f6;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;color:#56667c}
+    .forum-notification-line strong{color:#b91c1c}
+    .forum-notification-read{border:0;background:transparent;color:#4169c9;font-size:9px;font-weight:900;cursor:pointer;white-space:nowrap}
+    .forum-empty{padding:30px 12px;text-align:center;color:#8b99aa;font-size:11px;line-height:1.6}
+    .forum-loading{padding:24px 12px;text-align:center;color:#7b8a9c;font-size:11px}
+    @media(max-width:1200px){.forum-strip{width:320px}.forum-emoji-picker{width:260px}}
+    @media(max-width:980px){.forum-strip{top:104px;bottom:12px;width:320px}.forum-strip.forum-collapsed{top:170px;width:50px;height:148px}.forum-posts{padding:8px}}
+    @media(max-width:700px){.forum-strip{right:8px;left:8px;top:92px;bottom:8px;width:auto;border-radius:16px}.forum-strip.forum-collapsed{left:auto;right:0;top:154px;width:48px;height:142px;border-radius:14px 0 0 14px}.forum-emoji-picker{width:min(280px,calc(100vw - 42px))}}
+  `;
+  document.head.appendChild(style);
+}
+
+function forumDate(value){
+  try{
+    const d=new Date(value);
+    if(Number.isNaN(d.getTime())) return "";
+    return d.toLocaleString("vi-VN",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});
+  }catch{return "";}
+}
+
+function forumSanitizedCount(value){
+  const n=Number(value||0);
+  return Number.isFinite(n)?Math.max(0,Math.floor(n)):0;
+}
+
+function forumCurrentUsername(){
+  return String(state.profile?.username || state.profile?.nickname || "user").trim() || "user";
+}
+
+function forumRenderEmojiPicker(target, key){
+  const categories=Object.entries(FORUM_EMOJI_GROUPS);
+  const wrap=document.createElement("div");
+  wrap.className="forum-emoji-picker";
+  wrap.dataset.emojiPicker=key;
+  wrap.innerHTML=`<div class="forum-emoji-tabs">${categories.map(([cat])=>`<button class="forum-emoji-tab" type="button" data-emoji-cat="${cat}">${cat}</button>`).join("")}</div><div class="forum-emoji-grid"></div>`;
+  target.appendChild(wrap);
+  const grid=wrap.querySelector(".forum-emoji-grid");
+  const renderCat=(cat)=>{
+    const list=String(FORUM_EMOJI_GROUPS[cat]||"").split(/\s+/).filter(Boolean);
+    grid.innerHTML=list.map(e=>`<button type="button" class="forum-emoji-item" data-emoji-value="${escapeHtml(e)}">${e}</button>`).join("");
+    wrap.querySelectorAll("[data-emoji-cat]").forEach(b=>b.classList.toggle("active",b.dataset.emojiCat===cat));
+    grid.querySelectorAll("[data-emoji-value]").forEach(b=>b.addEventListener("click",()=>{
+      const value=b.dataset.emojiValue||"";
+      const ta=document.getElementById(key) || target.querySelector("textarea");
+      if(!ta) return;
+      const start=ta.selectionStart ?? ta.value.length;
+      const end=ta.selectionEnd ?? ta.value.length;
+      ta.value=ta.value.slice(0,start)+value+ta.value.slice(end);
+      ta.focus();
+      ta.selectionStart=ta.selectionEnd=start+value.length;
+    }));
+  };
+  wrap.querySelectorAll("[data-emoji-cat]").forEach(b=>b.addEventListener("click",()=>renderCat(b.dataset.emojiCat)));
+  renderCat(categories[0][0]);
+  return wrap;
+}
+
+function forumEmojiEditor(label, textareaId){
+  return `<div class="forum-emoji-wrap"><div class="forum-emoji-toolbar"><button class="forum-emoji-btn" type="button" data-forum-emoji-target="${textareaId}" aria-label="Chọn emoji">😀</button></div><div class="forum-emoji-host" data-forum-emoji-host="${textareaId}"></div></div>`;
+}
+
+function bindForumEmojiButtons(root){
+  $$("[data-forum-emoji-target]",root).forEach(btn=>btn.addEventListener("click",()=>{
+    const id=btn.dataset.forumEmojiTarget;
+    const host=root.querySelector(`[data-forum-emoji-host="${CSS.escape(id)}"]`);
+    if(!host) return;
+    if(!host.firstElementChild) forumRenderEmojiPicker(host,id);
+    const picker=host.firstElementChild;
+    document.querySelectorAll(".forum-emoji-picker.open").forEach(x=>{if(x!==picker)x.classList.remove("open");});
+    picker.classList.toggle("open");
+  }));
+}
+
+async function refreshForumNotificationCount(){
+  if(!state.token) return;
+  try{
+    const d=await api("/forum/notifications?unread_only=true&limit=20");
+    state.forumUnreadCount=forumSanitizedCount(d?.unread_count);
+    renderForumNotificationBadge();
+    renderForumNotificationLine();
+  }catch{}
+}
+
+function renderForumNotificationBadge(){
+  const badge=$("#forumUnreadBadge");
+  if(!badge) return;
+  const count=state.forumUnreadCount;
+  badge.textContent=count>99?"99+":String(count||"");
+  badge.classList.toggle("hidden",count<1);
+  badge.title=count?`${count} phản hồi mới`:"";
+  badge.setAttribute("aria-hidden",count?"false":"true");
+}
+
+async function markForumNotificationsRead(){
+  try{
+    await api("/forum/notifications/read",{method:"POST",body:{}});
+    state.forumUnreadCount=0;
+    renderForumNotificationBadge();
+    renderForumNotificationLine();
+  }catch(e){toast(e.message||"Không thể đánh dấu thông báo", "error");}
+}
+
+function renderForumNotificationLine(){
+  const line=$("#forumNotificationLine");
+  if(!line) return;
+  if(state.forumUnreadCount>0){
+    line.innerHTML=`<span>🔔 <strong>${state.forumUnreadCount}</strong> phản hồi mới cho bài của cậu.</span><button class="forum-notification-read" type="button" id="forumMarkReadBtn">Đã xem</button>`;
+    $("#forumMarkReadBtn")?.addEventListener("click",markForumNotificationsRead);
+    line.classList.remove("hidden");
+  }else{
+    line.innerHTML=""; line.classList.add("hidden");
+  }
+}
+
+function renderForumStrip(){
+  ensureForumStyles();
+  const root=$("#forumStrip");
+  if(!root) return;
+  root.classList.toggle("forum-collapsed",!state.forumExpanded);
+  root.innerHTML=`
+    <header class="forum-head">
+      <div class="forum-head-copy"><strong>Forum cộng đồng</strong><small>@${escapeHtml(forumCurrentUsername())}</small></div>
+      <div class="forum-head-actions">
+        <button class="forum-icon-button" type="button" id="forumBellBtn" aria-label="Thông báo forum">🔔<span id="forumUnreadBadge" class="forum-notify-badge hidden"></span></button>
+        <button class="forum-icon-button forum-collapse-btn" type="button" id="forumCollapseBtn" aria-label="Mở/đóng Forum">›</button>
+      </div>
+    </header>
+    <div class="forum-body">
+      <div id="forumNotificationLine" class="forum-notification-line hidden"></div>
+      <div class="forum-compose">
+        <input id="forumPostTitle" maxlength="180" placeholder="Tiêu đề bài viết…">
+        <textarea id="forumPostContent" maxlength="5000" rows="3" placeholder="Chia sẻ câu hỏi, kinh nghiệm hoặc một chủ đề để mọi người cùng trao đổi…"></textarea>
+        ${forumEmojiEditor("Emoji", "forumPostContent")}
+        <div class="forum-compose-row"><span class="forum-compose-hint">@${escapeHtml(forumCurrentUsername())} · text + emoji</span><button class="forum-primary-btn" type="button" id="forumPostBtn">Đăng bài</button></div>
+      </div>
+      <div id="forumPosts" class="forum-posts"><div class="forum-loading">Đang tải forum…</div></div>
+    </div>`;
+  $("#forumCollapseBtn").onclick=async()=>{
+    state.forumExpanded=!state.forumExpanded;
+    renderForumStrip();
+    if(state.forumExpanded){await loadForumPosts(); await refreshForumNotificationCount();}
+  };
+  $("#forumBellBtn").onclick=async()=>{
+    if(!state.forumExpanded){state.forumExpanded=true;renderForumStrip();await loadForumPosts();}
+    await markForumNotificationsRead();
+  };
+  $("#forumPostBtn").onclick=createForumPost;
+  $("#forumPostContent")?.addEventListener("keydown",e=>{if(e.key==='Enter'&&e.ctrlKey)createForumPost();});
+  bindForumEmojiButtons(root);
+  renderForumNotificationBadge();
+  renderForumNotificationLine();
+}
+
+async function loadForumPosts(){
+  const box=$("#forumPosts");
+  if(!box) return;
+  box.innerHTML=`<div class="forum-loading">Đang tải bài viết…</div>`;
+  try{
+    const d=await api("/forum/posts?limit=20");
+    state.forumPosts=Array.isArray(d?.posts)?d.posts:[];
+    renderForumPosts();
+  }catch(e){box.innerHTML=`<div class="forum-empty">Không tải được Forum.<br>${escapeHtml(e.message||"")}</div>`;}
+}
+
+function renderForumPosts(){
+  const box=$("#forumPosts");
+  if(!box) return;
+  if(!state.forumPosts.length){box.innerHTML=`<div class="forum-empty">Chưa có bài viết nào.<br>Hãy mở đầu cuộc trò chuyện đầu tiên nhé 🙂</div>`;return;}
+  box.innerHTML=state.forumPosts.map(post=>{
+    const id=Number(post.id);
+    const open=Number(state.forumOpenPostId)===id;
+    const comments=state.forumComments[id]||[];
+    const commentCount=forumSanitizedCount(post.comment_count);
+    return `<article class="forum-post-card" data-forum-post-id="${id}">
+      <div class="forum-post-head"><div><div class="forum-post-title">${escapeHtml(post.title||"")}</div><div class="forum-post-meta">@${escapeHtml(post.username||"user")} · ${escapeHtml(forumDate(post.created_at))}</div></div></div>
+      <div class="forum-post-content">${escapeHtml(post.content||"")}</div>
+      <div class="forum-post-footer"><button class="forum-comment-link" type="button" data-forum-open-post="${id}">${open?"Ẩn bình luận":"💬"} ${commentCount} bình luận</button>${post.is_mine?`<span class="forum-own-label">Bài của cậu</span>`:""}</div>
+      ${open?renderForumComments(post,comments):""}
+    </article>`;
+  }).join("");
+  $$('[data-forum-open-post]',box).forEach(btn=>btn.addEventListener("click",async()=>{
+    const id=Number(btn.dataset.forumOpenPost||0);
+    if(!id)return;
+    if(state.forumOpenPostId===id){state.forumOpenPostId=null;renderForumPosts();return;}
+    state.forumOpenPostId=id;
+    renderForumPosts();
+    await loadForumComments(id);
+  }));
+  $$('[data-forum-comment-send]',box).forEach(btn=>btn.addEventListener("click",()=>createForumComment(Number(btn.dataset.forumCommentSend||0))));
+  $$('[data-forum-comment-input]',box).forEach(ta=>ta.addEventListener("keydown",e=>{if(e.key==='Enter'&&e.ctrlKey)createForumComment(Number(ta.dataset.forumCommentInput||0));}));
+  $$('[data-forum-comment-input]',box).forEach(ta=>ta.addEventListener("input",()=>{ta.style.height="auto";ta.style.height=Math.min(100,ta.scrollHeight)+"px";}));
+  bindForumEmojiButtons(box);
+}
+
+function renderForumComments(post,comments){
+  return `<div class="forum-comments">${comments.length?comments.map(c=>`<div class="forum-comment"><div class="forum-comment-author">@${escapeHtml(c.username||"user")}</div><div class="forum-comment-text">${escapeHtml(c.content||"")}</div><small class="forum-comment-date">${escapeHtml(forumDate(c.created_at))}</small></div>`).join(""):`<div class="forum-empty" style="padding:8px">Chưa có bình luận. Hãy là người đầu tiên trả lời.</div>`}
+    <div class="forum-comment-compose">
+      <div class="forum-emoji-wrap">
+        <textarea id="forumCommentInput-${Number(post.id)}" class="forum-comment-input" data-forum-comment-input="${Number(post.id)}" maxlength="3000" rows="2" placeholder="Viết bình luận…"></textarea>
+        ${forumEmojiEditor("Emoji", `forumCommentInput-${Number(post.id)}`)}
+      </div>
+      <button class="forum-send-btn" type="button" data-forum-comment-send="${Number(post.id)}" aria-label="Gửi bình luận">➤</button>
+    </div>
+  </div>`;
+}
+
+async function loadForumComments(postId){
+  try{
+    const d=await api(`/forum/posts/${encodeURIComponent(postId)}/comments`);
+    state.forumComments[postId]=Array.isArray(d?.comments)?d.comments:[];
+    const post=state.forumPosts.find(x=>Number(x.id)===Number(postId));
+    if(post&&d?.comments) post.comment_count=d.comments.length;
+    renderForumPosts();
+  }catch(e){toast(e.message||"Không tải được bình luận", "error");}
+}
+
+async function createForumPost(){
+  const title=$("#forumPostTitle")?.value.trim();
+  const content=$("#forumPostContent")?.value.trim();
+  if(!title||!content){toast("Hãy nhập cả tiêu đề và nội dung bài viết.","error");return;}
+  const btn=$("#forumPostBtn");
+  if(btn)btn.disabled=true;
+  try{
+    await api("/forum/posts",{method:"POST",body:{title,content}});
+    $("#forumPostTitle").value=""; $("#forumPostContent").value="";
+    toast("Đã đăng bài lên Forum","success");
+    state.forumOpenPostId=null;
+    await loadForumPosts();
+  }catch(e){toast(e.message||"Không thể đăng bài", "error");}
+  finally{if(btn)btn.disabled=false;}
+}
+
+async function createForumComment(postId){
+  const input=$("#forumCommentInput-"+postId);
+  const content=input?.value.trim();
+  if(!content){toast("Bình luận không được để trống.","error");return;}
+  const btn=document.querySelector(`[data-forum-comment-send="${CSS.escape(String(postId))}"]`);
+  if(btn)btn.disabled=true;
+  try{
+    await api(`/forum/posts/${encodeURIComponent(postId)}/comments`,{method:"POST",body:{content}});
+    if(input)input.value="";
+    await loadForumComments(postId);
+    await loadForumPosts();
+  }catch(e){toast(e.message||"Không thể gửi bình luận", "error");}
+  finally{if(btn)btn.disabled=false;}
+}
+
+let __forumPoll=null;
+function startForumPolling(){
+  stopForumPolling();
+  refreshForumNotificationCount();
+  __forumPoll=setInterval(async()=>{
+    if(!state.token)return;
+    await refreshForumNotificationCount();
+    if(state.forumExpanded){
+      try{await loadForumPosts(); if(state.forumOpenPostId) await loadForumComments(state.forumOpenPostId);}catch{}
+    }
+  },7000);
+}
+function stopForumPolling(){
+  if(__forumPoll){clearInterval(__forumPoll);__forumPoll=null;}
+}
+
 function renderAppShell() {
   landingView.classList.add("hidden");
   appView.classList.remove("hidden");
@@ -787,6 +1131,7 @@ function renderAppShell() {
       </header>
       <main id="appContent" class="study-content"></main>
       <div id="profilePanel" class="profile-panel hidden" aria-hidden="true"></div>
+      <div id="forumStrip" class="forum-strip forum-collapsed" aria-label="Forum cộng đồng"></div>
     </div>`;
 
   $("#learnerMenuBtn").onclick = () => {
@@ -802,6 +1147,8 @@ function renderAppShell() {
     openLearnerPanel(btn.dataset.panel);
   }));
   startAdminUnreadPolling();
+  renderForumStrip();
+  startForumPolling();
   $("#courseSelect")?.addEventListener("change", async e => {
     await exitChatNowBeforeSwitch();
     const cid = e.target.value;
@@ -1168,7 +1515,7 @@ async function renderChat(el) {
   ensureStudyChatLayoutStyles();
   el.innerHTML = `<div class="study-grid">
     <aside class="study-library page-card"><div class="study-library-head"><div><span class="section-label">NỘI DUNG HỌC</span><h2>${escapeHtml(state.selectedCourseName||"Khóa học")}</h2></div><span class="content-count">Đang học</span></div><button class="tutor-launch-card" id="freeTutorBtn"><span class="tutor-launch-avatar" aria-hidden="true"><img src="assets/doraemon-teacher.png" alt="Doraemon" loading="lazy"></span><span class="tutor-launch-copy"><strong>Trò chuyện cùng gia sư</strong><small>Doraemon sẽ đồng hành và giúp cậu cải thiện những điểm còn yếu.</small></span><span class="tutor-launch-arrow">→</span></button><div class="study-library-list"><div class="loading">Đang tải nội dung…</div></div><div class="library-note">💡 Chọn bài để Doraemon mở đúng ngữ cảnh học. Trạng thái chi tiết của Giáo trình nằm trong menu <b>Thông tin người học → Giáo trình</b>.</div></aside>
-    <section class="chat-panel page-card"><div class="chat-toolbar"><div class="chat-toolbar-copy"><span class="section-label">${state.chatNow?'CHAT NOW':'PHIÊN HỌC'}</span><strong>${state.chatNow?'Chat now':'Học cùng Doraemon'}</strong><small>${state.chatNow?'Trò chuyện bằng ngoại ngữ trong một tình huống giả định vui vẻ; Doraemon vẫn sửa lỗi tự nhiên khi cậu viết sai.':'Doraemon hướng dẫn, giải thích, đặt câu hỏi và phản hồi ngay trong cùng một phòng học.'}</small></div><div class="chat-toolbar-actions"><button class="feature-launch-button chat-now-button" id="chatNowBtn">Chat now !</button><button class="feature-launch-button" id="collocationBtn">Collocation</button><button class="feature-launch-button" id="phrasalVerbBtn">Phrasal verb</button><button class="feature-launch-button" id="phrasingBtn">Phrasing</button><button class="small-button" id="newChatBtn">＋ Phiên mới</button></div></div><div class="chat-messages" id="chatMessages"></div><div class="chat-composer"><textarea id="chatInput" rows="1" placeholder="Hỏi Doraemon hoặc trả lời câu hỏi…"></textarea><button class="send-button" id="sendBtn" aria-label="Gửi tin nhắn">➤</button></div><div class="composer-hint">Enter để gửi · Shift+Enter để xuống dòng ·</div></section>
+    <section class="chat-panel page-card"><div class="chat-toolbar"><div class="chat-toolbar-copy"><span class="section-label">${state.chatNow?'CHAT NOW':'PHIÊN HỌC'}</span><strong>${state.chatNow?'Chat now':'Học cùng Doraemon'}</strong><small>${state.chatNow?'Trò chuyện bằng ngoại ngữ trong một tình huống giả định vui vẻ; Doraemon vẫn sửa lỗi tự nhiên khi cậu viết sai.':'Doraemon hướng dẫn, giải thích, đặt câu hỏi và phản hồi ngay trong cùng một phòng học.'}</small></div><div class="chat-toolbar-actions"><button class="feature-launch-button chat-now-button" id="chatNowBtn">Chat now !</button><button class="feature-launch-button" id="collocationBtn">Collocation</button><button class="feature-launch-button" id="phrasalVerbBtn">Phrasal verb</button><button class="feature-launch-button" id="phrasingBtn">Phrasing</button><button class="small-button" id="newChatBtn">＋ Phiên mới</button></div></div><div class="chat-messages" id="chatMessages"></div><div class="chat-composer"><textarea id="chatInput" rows="1" placeholder="Hỏi Doraemon hoặc trả lời câu hỏi…"></textarea><button class="send-button" id="sendBtn" aria-label="Gửi tin nhắn">➤</button></div><div class="composer-hint">Enter để gửi · Shift+Enter để xuống dòng · Có thể dán ảnh bài tập vào ô chat</div></section>
   </div>`;
   try {
     const [catalog, summary] = await Promise.all([
