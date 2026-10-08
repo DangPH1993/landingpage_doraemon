@@ -794,7 +794,14 @@ function ensureForumStyles(){
     .forum-notify-badge{position:absolute;right:-4px;top:-5px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;font-size:9px;font-weight:900;display:grid;place-items:center;border:2px solid #fff;line-height:1}
     .forum-notify-badge.hidden{display:none}
     .forum-body{display:flex;flex-direction:column;min-height:0;flex:1}
+    .forum-list-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid #edf1f5;background:#fff;flex:none}
+    .forum-list-title{font-size:10px;font-weight:900;color:#728198;text-transform:uppercase;letter-spacing:.03em}
     .forum-compose{padding:10px;border-bottom:1px solid #edf1f5;background:#fff;display:grid;gap:7px}
+    .forum-compose.hidden{display:none}
+    .forum-compose-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:1px}
+    .forum-compose-head strong{font-size:12px;color:#24354f}
+    .forum-compose-close{width:26px;height:26px;border:1px solid #dfe7ef;background:#fff;border-radius:8px;color:#66778f;cursor:pointer}
+    .forum-compose-close:hover{background:#f5f8fb}
     .forum-compose input,.forum-compose textarea,.forum-comment-input{width:100%;border:1px solid #dfe7f0;border-radius:10px;background:#fbfdff;outline:none;color:#26364f;font-size:12px}
     .forum-compose input{padding:9px 10px;font-weight:800}
     .forum-compose textarea{padding:9px 10px;resize:vertical;min-height:62px;max-height:150px;line-height:1.45}
@@ -964,7 +971,12 @@ function renderForumStrip(){
     </header>
     <div class="forum-body">
       <div id="forumNotificationLine" class="forum-notification-line hidden"></div>
-      <div class="forum-compose">
+      <div class="forum-list-toolbar">
+        <span class="forum-list-title">Bài đăng cộng đồng</span>
+        <button class="forum-primary-btn" type="button" id="forumCreateBtn">＋ Tạo bài đăng</button>
+      </div>
+      <div id="forumCompose" class="forum-compose hidden">
+        <div class="forum-compose-head"><strong>Tạo bài đăng</strong><button type="button" class="forum-compose-close" id="forumComposeClose" aria-label="Đóng màn đăng bài">✕</button></div>
         <input id="forumPostTitle" maxlength="180" placeholder="Tiêu đề bài viết…">
         <textarea id="forumPostContent" maxlength="5000" rows="3" placeholder="Chia sẻ câu hỏi, kinh nghiệm hoặc một chủ đề để mọi người cùng trao đổi…"></textarea>
         ${forumEmojiEditor("Emoji", "forumPostContent")}
@@ -980,6 +992,16 @@ function renderForumStrip(){
   $("#forumBellBtn").onclick=async()=>{
     if(!state.forumExpanded){state.forumExpanded=true;renderForumStrip();await loadForumPosts();}
     await markForumNotificationsRead();
+  };
+  $("#forumCreateBtn").onclick=()=>{
+    const compose=$("#forumCompose");
+    if(!compose)return;
+    compose.classList.remove("hidden");
+    $("#forumPostTitle")?.focus();
+  };
+  $("#forumComposeClose").onclick=()=>{
+    const compose=$("#forumCompose");
+    if(compose)compose.classList.add("hidden");
   };
   $("#forumPostBtn").onclick=createForumPost;
   $("#forumPostContent")?.addEventListener("keydown",e=>{if(e.key==='Enter'&&e.ctrlKey)createForumPost();});
@@ -1060,6 +1082,7 @@ async function createForumPost(){
   try{
     await api("/forum/posts",{method:"POST",body:{title,content}});
     $("#forumPostTitle").value=""; $("#forumPostContent").value="";
+    $("#forumCompose")?.classList.add("hidden");
     toast("Đã đăng bài lên Forum","success");
     state.forumOpenPostId=null;
     await loadForumPosts();
