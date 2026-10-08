@@ -34,7 +34,7 @@ const state = {
   forumComments: {},
   forumUnreadCount: 0,
   forumNewPostCount: 0,
-  forumLastSeenPostId: Number(localStorage.getItem("doraemon_forum_last_seen_post_id") || 0) || 0,
+  forumLastSeenPostId: 0,
   forumEditingPostId: null,
   forumExpandedPostContentIds: {},
 };
@@ -797,8 +797,6 @@ function ensureForumStyles(){
     .forum-collapsed .forum-collapse-btn{transform:rotate(180deg)}
     .forum-notify-badge{position:absolute;right:-4px;top:-5px;min-width:18px;height:18px;padding:0 4px;border-radius:999px;background:#ef4444;color:#fff;font-size:9px;font-weight:900;display:grid;place-items:center;border:2px solid #fff;line-height:1}
     .forum-notify-badge.hidden{display:none}
-    .forum-new-post-badge{position:absolute;right:-5px;top:-7px;min-width:12px;height:12px;padding:0 2px;border-radius:999px;background:#ef2222;color:#fff;border:2px solid #fff;box-sizing:border-box;display:grid;place-items:center;font-size:8px;font-weight:900;line-height:1;box-shadow:0 0 0 1px rgba(239,68,68,.10)}
-    .forum-new-post-badge.hidden{display:none}
     .forum-new-post-button{width:44px;height:24px;border:0;background:transparent;color:#e11;padding:0;font-size:9px;font-weight:1000;letter-spacing:-.2px;line-height:1;white-space:nowrap;font-family:Arial,sans-serif;cursor:pointer}
     .forum-new-post-button.hidden{display:none}
     .forum-new-post-button:hover{background:transparent;border:0;color:#d00;text-decoration:underline}
@@ -931,36 +929,54 @@ function bindForumEmojiButtons(root){
   }));
 }
 
-async function renderForumNewPostBadge(){
-  const badge=$("#forumNewPostBadge");
+function forumLastSeenKey(){
+  const userId = String(state.profile?.id || state.profile?.user_id || state.profile?.username || state.profile?.email || "guest").trim() || "guest";
+  return `doraemon_forum_last_seen_post_id:${userId}`;
+}
+
+function forumLoadLastSeenPostId(){
+  const key=forumLastSeenKey();
+  const scoped=Number(localStorage.getItem(key) || 0) || 0;
+  if(scoped){ state.forumLastSeenPostId=scoped; return scoped; }
+  // One-time compatibility with the old global v84 key.
+  const legacy=Number(localStorage.getItem("doraemon_forum_last_seen_post_id") || 0) || 0;
+  state.forumLastSeenPostId=legacy;
+  return legacy;
+}
+
+function forumSaveLastSeenPostId(id){
+  const n=Number(id)||0;
+  if(!n) return;
+  state.forumLastSeenPostId=n;
+  localStorage.setItem(forumLastSeenKey(),String(n));
+  // Keep the old key harmlessly in sync for compatibility with older v84 tabs.
+  localStorage.setItem("doraemon_forum_last_seen_post_id",String(n));
+}
+
+function renderForumNewPostBadge(){
   const button=$("#forumNewPostBtn");
   if(!button) return;
   const count=forumSanitizedCount(state.forumNewPostCount);
+  // BUZZ !!! itself is the unread indicator. There is deliberately no extra ! badge.
   button.classList.toggle("hidden",count<1);
   button.setAttribute("aria-hidden",count?"false":"true");
   button.title=count?`${count} bài đăng mới chưa xem`:"";
-  if(badge){
-    badge.classList.toggle("hidden",count<1);
-    if(count>0) badge.textContent="!";
-    badge.setAttribute("aria-hidden",count?"false":"true");
-  }
 }
 
 function updateForumNewPostState(posts, markSeen=false){
   const list=Array.isArray(posts)?posts:[];
   const latest=list.reduce((max,p)=>Math.max(max,Number(p?.id)||0),0);
-  const lastSeen=Number(state.forumLastSeenPostId)||0;
+  const lastSeen=forumLoadLastSeenPostId();
   if(!lastSeen && latest){
-    state.forumLastSeenPostId=latest;
+    // First ever load: establish the baseline without showing a false-positive buzz.
+    forumSaveLastSeenPostId(latest);
     state.forumNewPostCount=0;
-    localStorage.setItem("doraemon_forum_last_seen_post_id",String(latest));
   }else{
     state.forumNewPostCount=list.filter(p=>(Number(p?.id)||0)>lastSeen).length;
   }
   if(markSeen && latest){
-    state.forumLastSeenPostId=latest;
+    forumSaveLastSeenPostId(latest);
     state.forumNewPostCount=0;
-    localStorage.setItem("doraemon_forum_last_seen_post_id",String(latest));
   }
   renderForumNewPostBadge();
 }
@@ -1015,7 +1031,7 @@ function renderForumStrip(){
     <header class="forum-head">
       <div class="forum-head-copy"><strong>Forum cộng đồng</strong><small>@${escapeHtml(forumCurrentUsername())}</small></div>
       <div class="forum-head-actions">
-        <button class="forum-icon-button forum-new-post-button" type="button" id="forumNewPostBtn" aria-label="Bài đăng mới chưa xem">BUZZ !!!<span id="forumNewPostBadge" class="forum-new-post-badge hidden"></span></button>
+        <button class="forum-icon-button forum-new-post-button" type="button" id="forumNewPostBtn" aria-label="Bài đăng mới chưa xem">BUZZ !!!</button>
         <button class="forum-icon-button" type="button" id="forumBellBtn" aria-label="Thông báo forum">🔔<span id="forumUnreadBadge" class="forum-notify-badge hidden"></span></button>
         <button class="forum-icon-button forum-collapse-btn" type="button" id="forumCollapseBtn" aria-label="Mở/đóng Forum">›</button>
       </div>
