@@ -1,4 +1,4 @@
-// Doraemon Web Client v76 – Chat Now + library filters/collapsible groups
+// Doraemon Web Client v82 – Forum own edit/delete + long-post preview
 const API_BASE = (() => {
   const meta = document.querySelector('meta[name="doraemon-api-base"]');
   const configured = (window.DORAEMON_API_BASE || meta?.content || '').trim();
@@ -33,6 +33,8 @@ const state = {
   forumOpenPostId: null,
   forumComments: {},
   forumUnreadCount: 0,
+  forumEditingPostId: null,
+  forumExpandedPostContentIds: {},
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -817,7 +819,14 @@ function ensureForumStyles(){
     .forum-post-title{font-size:13px;font-weight:900;color:#1e2f48;line-height:1.35;overflow-wrap:anywhere}
     .forum-post-meta{margin-top:3px;font-size:9px;color:#8b99a9}
     .forum-post-content{margin:8px 0 7px;font-size:11px;color:#43536a;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+    .forum-post-content-toggle{border:0;background:transparent;padding:0;color:#3563c7;font-size:10px;font-weight:900;cursor:pointer}
+    .forum-post-content-toggle:hover{text-decoration:underline}
     .forum-post-footer{display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .forum-own-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+    .forum-own-action{border:0;background:transparent;color:#6f7f96;font-size:9px;font-weight:900;padding:3px 0;cursor:pointer}
+    .forum-own-action:hover{color:#2455bf;text-decoration:underline}
+    .forum-own-action.danger{color:#c34b4b}
+    .forum-own-action.danger:hover{color:#b42318}
     .forum-comment-link{border:0;background:transparent;color:#3563c7;font-size:10px;font-weight:800;padding:3px 0;cursor:pointer}
     .forum-comment-link:hover{text-decoration:underline}
     .forum-own-label{font-size:9px;color:#94a3b8}
@@ -976,7 +985,7 @@ function renderForumStrip(){
         <button class="forum-primary-btn" type="button" id="forumCreateBtn">＋ Tạo bài đăng</button>
       </div>
       <div id="forumCompose" class="forum-compose hidden">
-        <div class="forum-compose-head"><strong>Tạo bài đăng</strong><button type="button" class="forum-compose-close" id="forumComposeClose" aria-label="Đóng màn đăng bài">✕</button></div>
+        <div class="forum-compose-head"><strong id="forumComposeTitle">Tạo bài đăng</strong><button type="button" class="forum-compose-close" id="forumComposeClose" aria-label="Đóng màn đăng bài">✕</button></div>
         <input id="forumPostTitle" maxlength="180" placeholder="Tiêu đề bài viết…">
         <textarea id="forumPostContent" maxlength="5000" rows="3" placeholder="Chia sẻ câu hỏi, kinh nghiệm hoặc một chủ đề để mọi người cùng trao đổi…"></textarea>
         ${forumEmojiEditor("Emoji", "forumPostContent")}
@@ -993,16 +1002,8 @@ function renderForumStrip(){
     if(!state.forumExpanded){state.forumExpanded=true;renderForumStrip();await loadForumPosts();}
     await markForumNotificationsRead();
   };
-  $("#forumCreateBtn").onclick=()=>{
-    const compose=$("#forumCompose");
-    if(!compose)return;
-    compose.classList.remove("hidden");
-    $("#forumPostTitle")?.focus();
-  };
-  $("#forumComposeClose").onclick=()=>{
-    const compose=$("#forumCompose");
-    if(compose)compose.classList.add("hidden");
-  };
+  $("#forumCreateBtn").onclick=()=>openForumComposerForCreate();
+  $("#forumComposeClose").onclick=()=>closeForumComposer();
   $("#forumPostBtn").onclick=createForumPost;
   $("#forumPostContent")?.addEventListener("keydown",e=>{if(e.key==='Enter'&&e.ctrlKey)createForumPost();});
   bindForumEmojiButtons(root);
@@ -1021,6 +1022,18 @@ async function loadForumPosts(){
   }catch(e){box.innerHTML=`<div class="forum-empty">Không tải được Forum.<br>${escapeHtml(e.message||"")}</div>`;}
 }
 
+function forumPostPreviewHtml(post){
+  const full=String(post.content||"");
+  const words=full.trim() ? full.trim().split(/\s+/) : [];
+  const id=Number(post.id||0);
+  const expanded=!!state.forumExpandedPostContentIds[id];
+  if(words.length<=100 || expanded){
+    return `<div class="forum-post-content">${escapeHtml(full)}</div>${words.length>100?`<button type="button" class="forum-post-content-toggle" data-forum-content-toggle="${id}">Thu gọn</button>`:""}`;
+  }
+  const preview=words.slice(0,100).join(" ");
+  return `<div class="forum-post-content">${escapeHtml(preview)}…</div><button type="button" class="forum-post-content-toggle" data-forum-content-toggle="${id}">Xem thêm</button>`;
+}
+
 function renderForumPosts(){
   const box=$("#forumPosts");
   if(!box) return;
@@ -1030,13 +1043,22 @@ function renderForumPosts(){
     const open=Number(state.forumOpenPostId)===id;
     const comments=state.forumComments[id]||[];
     const commentCount=forumSanitizedCount(post.comment_count);
+    const ownActions=post.is_mine?`<div class="forum-own-actions"><span class="forum-own-label">Bài của cậu</span><button type="button" class="forum-own-action" data-forum-edit="${id}">Sửa</button><button type="button" class="forum-own-action danger" data-forum-delete="${id}">Xóa</button></div>`:"";
     return `<article class="forum-post-card" data-forum-post-id="${id}">
-      <div class="forum-post-head"><div><div class="forum-post-title">${escapeHtml(post.title||"")}</div><div class="forum-post-meta">@${escapeHtml(post.username||"user")} · ${escapeHtml(forumDate(post.created_at))}</div></div></div>
-      <div class="forum-post-content">${escapeHtml(post.content||"")}</div>
-      <div class="forum-post-footer"><button class="forum-comment-link" type="button" data-forum-open-post="${id}">${open?"Ẩn bình luận":"💬"} ${commentCount} bình luận</button>${post.is_mine?`<span class="forum-own-label">Bài của cậu</span>`:""}</div>
+      <div class="forum-post-head"><div><div class="forum-post-title">${escapeHtml(post.title||"")}</div><div class="forum-post-meta">@${escapeHtml(post.username||"user")} · ${escapeHtml(forumDate(post.created_at))}${post.updated_at&&post.updated_at!==post.created_at?" · đã sửa":""}</div></div></div>
+      ${forumPostPreviewHtml(post)}
+      <div class="forum-post-footer"><button class="forum-comment-link" type="button" data-forum-open-post="${id}">${open?"Ẩn bình luận":"💬"} ${commentCount} bình luận</button>${ownActions}</div>
       ${open?renderForumComments(post,comments):""}
     </article>`;
   }).join("");
+  $$('[data-forum-content-toggle]',box).forEach(btn=>btn.addEventListener("click",()=>{
+    const id=Number(btn.dataset.forumContentToggle||0);
+    if(!id)return;
+    state.forumExpandedPostContentIds[id]=!state.forumExpandedPostContentIds[id];
+    renderForumPosts();
+  }));
+  $$('[data-forum-edit]',box).forEach(btn=>btn.addEventListener("click",()=>openForumComposerForEdit(Number(btn.dataset.forumEdit||0))));
+  $$('[data-forum-delete]',box).forEach(btn=>btn.addEventListener("click",()=>deleteOwnForumPost(Number(btn.dataset.forumDelete||0))));
   $$('[data-forum-open-post]',box).forEach(btn=>btn.addEventListener("click",async()=>{
     const id=Number(btn.dataset.forumOpenPost||0);
     if(!id)return;
@@ -1073,6 +1095,42 @@ async function loadForumComments(postId){
   }catch(e){toast(e.message||"Không tải được bình luận", "error");}
 }
 
+function closeForumComposer(){
+  const compose=$("#forumCompose");
+  if(compose) compose.classList.add("hidden");
+  state.forumEditingPostId=null;
+  const title=$("#forumComposeTitle");
+  const btn=$("#forumPostBtn");
+  if(title)title.textContent="Tạo bài đăng";
+  if(btn)btn.textContent="Đăng bài";
+}
+
+function openForumComposerForCreate(){
+  const compose=$("#forumCompose");
+  if(!compose)return;
+  state.forumEditingPostId=null;
+  $("#forumComposeTitle").textContent="Tạo bài đăng";
+  $("#forumPostBtn").textContent="Đăng bài";
+  $("#forumPostTitle").value="";
+  $("#forumPostContent").value="";
+  compose.classList.remove("hidden");
+  $("#forumPostTitle")?.focus();
+}
+
+function openForumComposerForEdit(postId){
+  const post=state.forumPosts.find(x=>Number(x.id)===Number(postId));
+  if(!post || !post.is_mine)return;
+  const compose=$("#forumCompose");
+  if(!compose)return;
+  state.forumEditingPostId=Number(postId);
+  $("#forumComposeTitle").textContent="Sửa bài đăng";
+  $("#forumPostBtn").textContent="Lưu thay đổi";
+  $("#forumPostTitle").value=String(post.title||"");
+  $("#forumPostContent").value=String(post.content||"");
+  compose.classList.remove("hidden");
+  $("#forumPostTitle")?.focus();
+}
+
 async function createForumPost(){
   const title=$("#forumPostTitle")?.value.trim();
   const content=$("#forumPostContent")?.value.trim();
@@ -1080,14 +1138,43 @@ async function createForumPost(){
   const btn=$("#forumPostBtn");
   if(btn)btn.disabled=true;
   try{
-    await api("/forum/posts",{method:"POST",body:{title,content}});
-    $("#forumPostTitle").value=""; $("#forumPostContent").value="";
-    $("#forumCompose")?.classList.add("hidden");
-    toast("Đã đăng bài lên Forum","success");
-    state.forumOpenPostId=null;
-    await loadForumPosts();
-  }catch(e){toast(e.message||"Không thể đăng bài", "error");}
+    if(state.forumEditingPostId){
+      const postId=Number(state.forumEditingPostId);
+      const d=await api(`/forum/posts/${encodeURIComponent(postId)}`,{method:"PUT",body:{title,content}});
+      const updated=d?.post;
+      const idx=state.forumPosts.findIndex(x=>Number(x.id)===postId);
+      if(idx>=0&&updated)state.forumPosts[idx]={...state.forumPosts[idx],...updated,is_mine:true};
+      state.forumExpandedPostContentIds[postId]=false;
+      closeForumComposer();
+      renderForumPosts();
+      toast("Đã cập nhật bài viết","success");
+    }else{
+      const d=await api("/forum/posts",{method:"POST",body:{title,content}});
+      if(d?.post)state.forumPosts=[d.post,...state.forumPosts].slice(0,20);
+      closeForumComposer();
+      state.forumOpenPostId=null;
+      state.forumExpandedPostContentIds={};
+      renderForumPosts();
+      toast("Đã đăng bài lên Forum","success");
+    }
+  }catch(e){toast(e.message||"Không thể lưu bài viết", "error");}
   finally{if(btn)btn.disabled=false;}
+}
+
+async function deleteOwnForumPost(postId){
+  const post=state.forumPosts.find(x=>Number(x.id)===Number(postId));
+  if(!post || !post.is_mine)return;
+  if(!confirm(`Xóa bài "${String(post.title||"")}"?\n\nCác bình luận và thông báo liên quan cũng sẽ bị xóa.`))return;
+  try{
+    await api(`/forum/posts/${encodeURIComponent(postId)}`,{method:"DELETE"});
+    state.forumPosts=state.forumPosts.filter(x=>Number(x.id)!==Number(postId));
+    delete state.forumComments[postId];
+    delete state.forumExpandedPostContentIds[postId];
+    if(Number(state.forumOpenPostId)===Number(postId))state.forumOpenPostId=null;
+    renderForumPosts();
+    toast("Đã xóa bài viết","success");
+    await refreshForumNotificationCount();
+  }catch(e){toast(e.message||"Không thể xóa bài viết", "error");}
 }
 
 async function createForumComment(postId){
