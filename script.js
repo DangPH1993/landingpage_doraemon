@@ -1766,6 +1766,17 @@ async function renderChat(el) {
     ]);
     const docs=catalog.documents||[];
     const progress=summary.learning_history||[];
+    const exerciseScoresForUi=progress
+      .filter(row=>String(row.content_type||"").trim()==="Bài tập"
+        && ["completed","done"].includes(String(row.status||"").trim().toLowerCase())
+        && row.exercise_score!=null
+        && Number.isFinite(Number(row.exercise_score)))
+      .map(row=>Number(row.exercise_score));
+    const exerciseAverageScoreForUi=summary.exercise_average_score_10!=null
+      ? Number(summary.exercise_average_score_10)
+      : (exerciseScoresForUi.length
+          ? exerciseScoresForUi.reduce((a,b)=>a+b,0)/exerciseScoresForUi.length
+          : null);
     const grouped={};
     docs.forEach(r=>{const ct=r.content_type||"Nội dung"; const lesson=r.lesson||""; if(!lesson)return;(grouped[ct]??=[]).push(r);});
     const statusRank={completed:3,done:3,in_progress:2,active:2,review:2,needs_review:2};
@@ -1788,7 +1799,7 @@ async function renderChat(el) {
     const typeOrder=["Giáo trình","Từ vựng","Ngữ pháp","Bài tập","Luyện viết","Truyện đọc"];
     const types=[...typeOrder.filter(t=>grouped[t]?.length),...Object.keys(grouped).filter(x=>!typeOrder.includes(x))];
     const cardRows=[];
-    const sections=types.filter(t=>grouped[t]?.length).map((t,sectionIndex)=>{const initiallyExpanded=sectionIndex===0; const lessonCount=new Set(grouped[t].map(x=>`${x.lesson}|${x.topic||""}`)).size; const avgExerciseScore=(t==="Bài tập" && summary.exercise_average_score_10!=null)?` · ĐTB ${Number(summary.exercise_average_score_10).toFixed(1)}/10`:""; return `<div class="lesson-section${initiallyExpanded?' expanded':''}" data-section-type="${escapeHtml(t)}"><div class="lesson-section-head"><button type="button" class="lesson-section-toggle" aria-expanded="${initiallyExpanded?'true':'false'}" title="Mở/đóng nhóm">${initiallyExpanded?'▾':'▸'}</button><span>${iconType(t)} ${escapeHtml(t)}</span><small class="lesson-section-count">${lessonCount} bài${avgExerciseScore}</small></div><div class="lesson-section-body">${uniqRows(grouped[t]).slice(0,30).map(r=>{
+    const sections=types.filter(t=>grouped[t]?.length).map((t,sectionIndex)=>{const initiallyExpanded=sectionIndex===0; const lessonCount=new Set(grouped[t].map(x=>`${x.lesson}|${x.topic||""}`)).size; const avgExerciseScore=(t==="Bài tập" && exerciseAverageScoreForUi!=null)?` · ĐTB ${Number(exerciseAverageScoreForUi).toFixed(1)}/10`:""; return `<div class="lesson-section${initiallyExpanded?' expanded':''}" data-section-type="${escapeHtml(t)}"><div class="lesson-section-head"><button type="button" class="lesson-section-toggle" aria-expanded="${initiallyExpanded?'true':'false'}" title="Mở/đóng nhóm">${initiallyExpanded?'▾':'▸'}</button><span>${iconType(t)} ${escapeHtml(t)}</span><small class="lesson-section-count">${lessonCount} bài${avgExerciseScore}</small></div><div class="lesson-section-body">${uniqRows(grouped[t]).slice(0,30).map(r=>{
       const actualType=String(r.content_type||t).trim();
       const key=`${r.course_id!=null?String(r.course_id):""}|${actualType.toLocaleLowerCase("vi-VN")}|${String(r.lesson||"").trim().toLocaleLowerCase("vi-VN")}|${String(r.topic||"").trim().toLocaleLowerCase("vi-VN")}`;
       const progressRow=progressMap.get(key);
@@ -1918,8 +1929,8 @@ async function renderChat(el) {
       section.style.display=sectionVisible?"":"none";
       const count=section.querySelector(".lesson-section-count");
       if(count){
-        const avgText=(String(section.dataset.sectionType||"") === "Bài tập" && summary?.exercise_average_score_10!=null)
-          ? ` · ĐTB ${Number(summary.exercise_average_score_10).toFixed(1)}/10`
+        const avgText=(String(section.dataset.sectionType||"") === "Bài tập" && exerciseAverageScoreForUi!=null)
+          ? ` · ĐTB ${Number(exerciseAverageScoreForUi).toFixed(1)}/10`
           : "";
         count.textContent=`${sectionVisible} bài${avgText}`;
       }
@@ -1939,13 +1950,24 @@ async function renderCatalog(el){
   ]);
   const docs=data.documents||[];
   const progress=summary.learning_history||[];
+  const exerciseScoresForUi=progress
+    .filter(row=>String(row.content_type||"").trim()==="Bài tập"
+      && ["completed","done"].includes(String(row.status||"").trim().toLowerCase())
+      && row.exercise_score!=null
+      && Number.isFinite(Number(row.exercise_score)))
+    .map(row=>Number(row.exercise_score));
+  const exerciseAverageScoreForUi=summary.exercise_average_score_10!=null
+    ? Number(summary.exercise_average_score_10)
+    : (exerciseScoresForUi.length
+        ? exerciseScoresForUi.reduce((a,b)=>a+b,0)/exerciseScoresForUi.length
+        : null);
   const progressMap=new Map();
   for(const row of progress){const key=`${row.course_id!=null?String(row.course_id):""}|${String(row.content_type||"").trim().toLocaleLowerCase("vi-VN")}|${String(row.lesson||"").trim().toLocaleLowerCase("vi-VN")}|${String(row.topic||"").trim().toLocaleLowerCase("vi-VN")}`;progressMap.set(key,row);}
   const grouped={}; docs.forEach(r=>{const ct=r.content_type||"Nội dung"; const lesson=r.lesson||""; if(!lesson)return;(grouped[ct]??=[]).push(r);});
   const types=["Giáo trình","Từ vựng","Ngữ pháp","Bài tập","Truyện đọc",...Object.keys(grouped).filter(x=>!["Giáo trình","Từ vựng","Ngữ pháp","Bài tập","Truyện đọc"].includes(x))];
   const freePlan=String(data.subscription?.plan||state.__me?.subscription?.plan||"Free").toLowerCase()==="free";
   const renderLesson=r=>{const locked=Boolean(r.locked);const key=`${r.course_id!=null?String(r.course_id):""}|${String(r.content_type||"").trim().toLocaleLowerCase("vi-VN")}|${String(r.lesson||"").trim().toLocaleLowerCase("vi-VN")}|${String(r.topic||"").trim().toLocaleLowerCase("vi-VN")}`;const pr=progressMap.get(key);const score=(String(r.content_type||"").trim()==="Bài tập"&&String(pr?.status||"").toLowerCase()==="completed"&&pr?.exercise_score!=null)?Number(pr.exercise_score):null;const scoreHtml=score!=null&&Number.isFinite(score)?`<small class="lesson-score">⭐ ${score.toFixed(1)}/10</small>`:"";return `<button class="lesson-card ${locked?'locked':''}" data-lesson="${escapeHtml(r.lesson)}" data-type="${escapeHtml(r.content_type)}" data-topic="${escapeHtml(r.topic||"")}" data-locked="${locked?'1':'0'}" ${locked?'aria-disabled="true"':''} style="${locked?'opacity:.58;cursor:not-allowed;':''}"><div><strong>${escapeHtml(r.lesson)}</strong><small>${escapeHtml(r.topic||"")}</small>${scoreHtml}</div><span>${locked?'🔒 Khóa':'Học →'}</span></button>`;};
-  el.innerHTML=`<div class="page-grid"><section><div class="page-card"><div class="card-head"><div><strong>Nội dung được cấp quyền</strong><small>${docs.length?`${docs.length} bản ghi nội dung`:"Chưa có nội dung"}</small></div><button class="small-button" id="catalogRefresh">↻ Làm mới</button></div>${docs.length?types.filter(t=>grouped[t]?.length).map(t=>`<div class="content-group"><div class="group-head"><span>${iconType(t)} ${escapeHtml(t)}</span><small>${new Set(grouped[t].map(x=>`${x.lesson}|${x.topic||""}`)).size} bài${t==="Bài tập"&&summary.exercise_average_score_10!=null?` · ĐTB ${Number(summary.exercise_average_score_10).toFixed(1)}/10`:""}</small></div>${uniqRows(grouped[t]).map(renderLesson).join("")}</div>`).join(""): `<div class="empty-state">${data.requires_course_selection?"Hãy chọn khóa học ở góc phải.":"Tài khoản chưa có nội dung khóa học được cấp quyền."}</div>`}</div></section><aside class="page-card insight"><h3>📌 Quyền học</h3><p>${freePlan?'Gói Free: 5 bài cho mỗi loại nội dung. Các bài còn lại được khóa.':'Gói hiện tại: học toàn bộ khóa học và tối đa 200 request GenAI mỗi ngày.'}</p><div class="stat-grid"><div><strong>${docs.length}</strong><span>Bản ghi</span></div><div><strong>${Object.keys(grouped).length}</strong><span>Loại nội dung</span></div></div></aside></div>`;
+  el.innerHTML=`<div class="page-grid"><section><div class="page-card"><div class="card-head"><div><strong>Nội dung được cấp quyền</strong><small>${docs.length?`${docs.length} bản ghi nội dung`:"Chưa có nội dung"}</small></div><button class="small-button" id="catalogRefresh">↻ Làm mới</button></div>${docs.length?types.filter(t=>grouped[t]?.length).map(t=>`<div class="content-group"><div class="group-head"><span>${iconType(t)} ${escapeHtml(t)}</span><small>${new Set(grouped[t].map(x=>`${x.lesson}|${x.topic||""}`)).size} bài${t==="Bài tập"&&exerciseAverageScoreForUi!=null?` · ĐTB ${Number(exerciseAverageScoreForUi).toFixed(1)}/10`:""}</small></div>${uniqRows(grouped[t]).map(renderLesson).join("")}</div>`).join(""): `<div class="empty-state">${data.requires_course_selection?"Hãy chọn khóa học ở góc phải.":"Tài khoản chưa có nội dung khóa học được cấp quyền."}</div>`}</div></section><aside class="page-card insight"><h3>📌 Quyền học</h3><p>${freePlan?'Gói Free: 5 bài cho mỗi loại nội dung. Các bài còn lại được khóa.':'Gói hiện tại: học toàn bộ khóa học và tối đa 200 request GenAI mỗi ngày.'}</p><div class="stat-grid"><div><strong>${docs.length}</strong><span>Bản ghi</span></div><div><strong>${Object.keys(grouped).length}</strong><span>Loại nội dung</span></div></div></aside></div>`;
   $("#catalogRefresh").onclick=()=>renderCatalog($("#appContent"));
   $$(".lesson-card").forEach(b=>b.onclick=()=>{if(b.dataset.locked==="1"){toast("🔒 Bài này đang bị khóa trong gói Free.","error");return;}startLesson(b.dataset.lesson,b.dataset.type,b.dataset.topic||"");});
 }
