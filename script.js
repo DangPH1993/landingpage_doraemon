@@ -777,7 +777,7 @@ function ensureForumStyles(){
   const style=document.createElement("style");
   style.id="doraemon-forum-styles";
   style.textContent=`
-    .forum-strip{position:fixed;right:14px;top:112px;bottom:18px;width:352px;z-index:85;display:flex;flex-direction:column;background:rgba(255,255,255,.98);border:1px solid #dfe7f0;border-radius:18px;box-shadow:0 20px 55px rgba(24,45,76,.16);overflow:hidden;transition:width .2s ease,box-shadow .2s ease}
+    .forum-strip{position:fixed;right:14px;top:112px;bottom:18px;width:528px;z-index:85;display:flex;flex-direction:column;background:rgba(255,255,255,.98);border:1px solid #dfe7f0;border-radius:18px;box-shadow:0 20px 55px rgba(24,45,76,.16);overflow:hidden;transition:width .2s ease,box-shadow .2s ease}
     .forum-strip.forum-collapsed{width:52px;height:152px;bottom:auto;top:180px;border-radius:16px 0 0 16px;right:0;box-shadow:0 12px 30px rgba(24,45,76,.14)}
     .forum-collapsed .forum-body{display:none}
     .forum-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px 13px;border-bottom:1px solid #edf1f5;background:#fbfdff;flex:none}
@@ -838,8 +838,8 @@ function ensureForumStyles(){
     .forum-notification-read{border:0;background:transparent;color:#4169c9;font-size:9px;font-weight:900;cursor:pointer;white-space:nowrap}
     .forum-empty{padding:30px 12px;text-align:center;color:#8b99aa;font-size:11px;line-height:1.6}
     .forum-loading{padding:24px 12px;text-align:center;color:#7b8a9c;font-size:11px}
-    @media(max-width:1200px){.forum-strip{width:320px}.forum-emoji-picker{width:260px}}
-    @media(max-width:980px){.forum-strip{top:104px;bottom:12px;width:320px}.forum-strip.forum-collapsed{top:170px;width:50px;height:148px}.forum-posts{padding:8px}}
+    @media(max-width:1200px){.forum-strip{width:480px}.forum-emoji-picker{width:260px}}
+    @media(max-width:980px){.forum-strip{top:104px;bottom:12px;width:440px}.forum-strip.forum-collapsed{top:170px;width:50px;height:148px}.forum-posts{padding:8px}}
     @media(max-width:700px){.forum-strip{right:8px;left:8px;top:92px;bottom:8px;width:auto;border-radius:16px}.forum-strip.forum-collapsed{left:auto;right:0;top:154px;width:48px;height:142px;border-radius:14px 0 0 14px}.forum-emoji-picker{width:min(280px,calc(100vw - 42px))}}
   `;
   document.head.appendChild(style);
@@ -881,8 +881,10 @@ function forumRenderEmojiPicker(target, key){
       const start=ta.selectionStart ?? ta.value.length;
       const end=ta.selectionEnd ?? ta.value.length;
       ta.value=ta.value.slice(0,start)+value+ta.value.slice(end);
+      ta.dispatchEvent(new Event("input",{bubbles:true}));
       ta.focus();
       ta.selectionStart=ta.selectionEnd=start+value.length;
+      wrap.classList.remove("open");
     }));
   };
   wrap.querySelectorAll("[data-emoji-cat]").forEach(b=>b.addEventListener("click",()=>renderCat(b.dataset.emojiCat)));
@@ -1080,21 +1082,11 @@ async function createForumComment(postId){
   finally{if(btn)btn.disabled=false;}
 }
 
-let __forumPoll=null;
 function startForumPolling(){
-  stopForumPolling();
+  // Intentionally no interval polling: Forum loads on page load and when expanded.
   refreshForumNotificationCount();
-  __forumPoll=setInterval(async()=>{
-    if(!state.token)return;
-    await refreshForumNotificationCount();
-    if(state.forumExpanded){
-      try{await loadForumPosts(); if(state.forumOpenPostId) await loadForumComments(state.forumOpenPostId);}catch{}
-    }
-  },7000);
 }
-function stopForumPolling(){
-  if(__forumPoll){clearInterval(__forumPoll);__forumPoll=null;}
-}
+function stopForumPolling(){}
 
 function renderAppShell() {
   landingView.classList.add("hidden");
