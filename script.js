@@ -1140,7 +1140,7 @@ async function createForumPost(){
   try{
     if(state.forumEditingPostId){
       const postId=Number(state.forumEditingPostId);
-      const d=await api(`/forum/posts/${encodeURIComponent(postId)}`,{method:"PUT",body:{title,content}});
+      const d=await api(`/forum/posts/${encodeURIComponent(postId)}/edit`,{method:"POST",body:{title,content}});
       const updated=d?.post;
       const idx=state.forumPosts.findIndex(x=>Number(x.id)===postId);
       if(idx>=0&&updated)state.forumPosts[idx]={...state.forumPosts[idx],...updated,is_mine:true};
