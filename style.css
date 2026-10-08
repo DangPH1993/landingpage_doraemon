@@ -1692,3 +1692,5 @@ button,input,textarea,select{font-family:var(--font-sans)!important;}
 .chat-now-button{border-color:#f2c58f!important;background:#fff1dc!important;color:#a85b10!important;font-weight:850!important;box-shadow:0 2px 8px rgba(191,120,34,.10)!important}
 .chat-now-button:hover{border-color:#e8ad68!important;background:#ffebcf!important}
 @media(max-width:720px){.lesson-section-head{grid-template-columns:22px minmax(0,1fr) auto}.chat-toolbar-actions{padding-bottom:4px}}
+
+.lesson-score{font-size:9px!important;color:#2563eb!important;font-weight:800!important;}
