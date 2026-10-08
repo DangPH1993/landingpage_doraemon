@@ -38,6 +38,10 @@ const state = {
   forumEditingPostId: null,
   forumExpandedPostContentIds: {},
   forumLoadSeq: 0,
+  forumPageSize: 20,
+  forumNextOffset: 0,
+  forumHasMore: true,
+  forumLoadingMore: false,
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -827,6 +831,7 @@ function ensureForumStyles(){
     .forum-post-content{margin:8px 0 7px;font-size:11px;color:#43536a;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
     .forum-post-content-toggle{border:0;background:transparent;padding:0;color:#3563c7;font-size:10px;font-weight:900;cursor:pointer}
     .forum-post-content-toggle:hover{text-decoration:underline}
+    .forum-load-more-state,.forum-load-more-end{padding:10px 6px 14px;text-align:center;font-size:9px;color:#93a0b0}.forum-load-more-state{font-weight:700}.forum-load-more-end{color:#a8b2bf}
     .forum-post-footer{display:flex;align-items:center;justify-content:space-between;gap:8px}
     .forum-own-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
     .forum-own-action{border:0;background:transparent;color:#6f7f96;font-size:9px;font-weight:900;padding:3px 0;cursor:pointer}
@@ -1094,19 +1099,61 @@ async function loadForumPosts(markSeen=false){
   const box=$("#forumPosts");
   if(!box) return;
   const requestSeq = ++state.forumLoadSeq;
+  state.forumNextOffset=0;
+  state.forumHasMore=true;
+  state.forumLoadingMore=false;
   box.innerHTML=`<div class="forum-loading">Đang tải bài viết…</div>`;
   try{
-    const d=await api("/forum/posts?limit=20");
+    const limit=Number(state.forumPageSize)||20;
+    const d=await api(`/forum/posts?limit=${limit}&offset=0`);
     // Ignore a stale response, e.g. when the user expanded then immediately
     // collapsed the Forum while the request was still in flight.
     if(requestSeq !== state.forumLoadSeq) return;
     state.forumPosts=Array.isArray(d?.posts)?d.posts:[];
+    state.forumNextOffset=Number(d?.next_offset ?? state.forumPosts.length) || state.forumPosts.length;
+    state.forumHasMore=d?.has_more !== false && state.forumPosts.length>=limit;
     renderForumPosts();
     updateForumNewPostState(state.forumPosts,markSeen);
   }catch(e){
     if(requestSeq !== state.forumLoadSeq) return;
     box.innerHTML=`<div class="forum-empty">Không tải được Forum.<br>${escapeHtml(e.message||"")}</div>`;
   }
+}
+
+async function loadMoreForumPosts(){
+  const box=$("#forumPosts");
+  if(!box || !state.forumExpanded || state.forumLoadingMore || !state.forumHasMore) return;
+  state.forumLoadingMore=true;
+  const requestSeq=state.forumLoadSeq;
+  const limit=Number(state.forumPageSize)||20;
+  const offset=Number(state.forumNextOffset)||0;
+  const previousScrollTop=box.scrollTop;
+  try{
+    const d=await api(`/forum/posts?limit=${limit}&offset=${offset}`);
+    if(requestSeq !== state.forumLoadSeq || !state.forumExpanded) return;
+    const incoming=Array.isArray(d?.posts)?d.posts:[];
+    const existingIds=new Set(state.forumPosts.map(p=>Number(p?.id)||0));
+    const fresh=incoming.filter(p=>!existingIds.has(Number(p?.id)||0));
+    state.forumPosts=[...state.forumPosts,...fresh];
+    state.forumNextOffset=Number(d?.next_offset ?? (offset+incoming.length)) || (offset+incoming.length);
+    state.forumHasMore=d?.has_more !== false && incoming.length>=limit;
+    renderForumPosts();
+    box.scrollTop=previousScrollTop;
+  }catch(e){
+    if(requestSeq === state.forumLoadSeq) toast(e.message||"Không thể tải thêm bài viết", "error");
+  }finally{
+    if(requestSeq === state.forumLoadSeq) state.forumLoadingMore=false;
+  }
+}
+
+function bindForumLazyLoad(){
+  const box=$("#forumPosts");
+  if(!box) return;
+  box.onscroll=()=>{
+    if(box.scrollTop + box.clientHeight >= box.scrollHeight - 140){
+      loadMoreForumPosts();
+    }
+  };
 }
 
 function forumPostPreviewHtml(post){
@@ -1124,7 +1171,11 @@ function forumPostPreviewHtml(post){
 function renderForumPosts(){
   const box=$("#forumPosts");
   if(!box) return;
-  if(!state.forumPosts.length){box.innerHTML=`<div class="forum-empty">Chưa có bài viết nào.<br>Hãy mở đầu cuộc trò chuyện đầu tiên nhé 🙂</div>`;return;}
+  if(!state.forumPosts.length){
+    box.innerHTML=`<div class="forum-empty">Chưa có bài viết nào.<br>Hãy mở đầu cuộc trò chuyện đầu tiên nhé 🙂</div>`;
+    bindForumLazyLoad();
+    return;
+  }
   box.innerHTML=state.forumPosts.map(post=>{
     const id=Number(post.id);
     const open=Number(state.forumOpenPostId)===id;
@@ -1137,7 +1188,8 @@ function renderForumPosts(){
       <div class="forum-post-footer"><button class="forum-comment-link" type="button" data-forum-open-post="${id}">${open?"Ẩn bình luận":"💬"} ${commentCount} bình luận</button>${ownActions}</div>
       ${open?renderForumComments(post,comments):""}
     </article>`;
-  }).join("");
+  }).join("")+(!state.forumHasMore?`<div class="forum-load-more-end">Đã tải hết bài viết.</div>`:`<div class="forum-load-more-state">${state.forumLoadingMore?"Đang tải thêm…":"Kéo xuống để tải thêm bài viết"}</div>`);
+  bindForumLazyLoad();
   $$('[data-forum-content-toggle]',box).forEach(btn=>btn.addEventListener("click",()=>{
     const id=Number(btn.dataset.forumContentToggle||0);
     if(!id)return;
@@ -1274,7 +1326,6 @@ async function createForumComment(postId){
     await api(`/forum/posts/${encodeURIComponent(postId)}/comments`,{method:"POST",body:{content}});
     if(input)input.value="";
     await loadForumComments(postId);
-    await loadForumPosts();
   }catch(e){toast(e.message||"Không thể gửi bình luận", "error");}
   finally{if(btn)btn.disabled=false;}
 }
