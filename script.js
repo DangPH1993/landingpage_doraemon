@@ -38,10 +38,6 @@ const state = {
   forumEditingPostId: null,
   forumExpandedPostContentIds: {},
   forumLoadSeq: 0,
-  forumPageSize: 20,
-  forumNextOffset: 0,
-  forumHasMore: true,
-  forumLoadingMore: false,
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -831,7 +827,6 @@ function ensureForumStyles(){
     .forum-post-content{margin:8px 0 7px;font-size:11px;color:#43536a;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
     .forum-post-content-toggle{border:0;background:transparent;padding:0;color:#3563c7;font-size:10px;font-weight:900;cursor:pointer}
     .forum-post-content-toggle:hover{text-decoration:underline}
-    .forum-load-more-state,.forum-load-more-end{padding:10px 6px 14px;text-align:center;font-size:9px;color:#93a0b0}.forum-load-more-state{font-weight:700}.forum-load-more-end{color:#a8b2bf}
     .forum-post-footer{display:flex;align-items:center;justify-content:space-between;gap:8px}
     .forum-own-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
     .forum-own-action{border:0;background:transparent;color:#6f7f96;font-size:9px;font-weight:900;padding:3px 0;cursor:pointer}
@@ -1099,61 +1094,19 @@ async function loadForumPosts(markSeen=false){
   const box=$("#forumPosts");
   if(!box) return;
   const requestSeq = ++state.forumLoadSeq;
-  state.forumNextOffset=0;
-  state.forumHasMore=true;
-  state.forumLoadingMore=false;
   box.innerHTML=`<div class="forum-loading">Đang tải bài viết…</div>`;
   try{
-    const limit=Number(state.forumPageSize)||20;
-    const d=await api(`/forum/posts?limit=${limit}&offset=0`);
+    const d=await api("/forum/posts?limit=20");
     // Ignore a stale response, e.g. when the user expanded then immediately
     // collapsed the Forum while the request was still in flight.
     if(requestSeq !== state.forumLoadSeq) return;
     state.forumPosts=Array.isArray(d?.posts)?d.posts:[];
-    state.forumNextOffset=Number(d?.next_offset ?? state.forumPosts.length) || state.forumPosts.length;
-    state.forumHasMore=d?.has_more !== false && state.forumPosts.length>=limit;
     renderForumPosts();
     updateForumNewPostState(state.forumPosts,markSeen);
   }catch(e){
     if(requestSeq !== state.forumLoadSeq) return;
     box.innerHTML=`<div class="forum-empty">Không tải được Forum.<br>${escapeHtml(e.message||"")}</div>`;
   }
-}
-
-async function loadMoreForumPosts(){
-  const box=$("#forumPosts");
-  if(!box || !state.forumExpanded || state.forumLoadingMore || !state.forumHasMore) return;
-  state.forumLoadingMore=true;
-  const requestSeq=state.forumLoadSeq;
-  const limit=Number(state.forumPageSize)||20;
-  const offset=Number(state.forumNextOffset)||0;
-  const previousScrollTop=box.scrollTop;
-  try{
-    const d=await api(`/forum/posts?limit=${limit}&offset=${offset}`);
-    if(requestSeq !== state.forumLoadSeq || !state.forumExpanded) return;
-    const incoming=Array.isArray(d?.posts)?d.posts:[];
-    const existingIds=new Set(state.forumPosts.map(p=>Number(p?.id)||0));
-    const fresh=incoming.filter(p=>!existingIds.has(Number(p?.id)||0));
-    state.forumPosts=[...state.forumPosts,...fresh];
-    state.forumNextOffset=Number(d?.next_offset ?? (offset+incoming.length)) || (offset+incoming.length);
-    state.forumHasMore=d?.has_more !== false && incoming.length>=limit;
-    renderForumPosts();
-    box.scrollTop=previousScrollTop;
-  }catch(e){
-    if(requestSeq === state.forumLoadSeq) toast(e.message||"Không thể tải thêm bài viết", "error");
-  }finally{
-    if(requestSeq === state.forumLoadSeq) state.forumLoadingMore=false;
-  }
-}
-
-function bindForumLazyLoad(){
-  const box=$("#forumPosts");
-  if(!box) return;
-  box.onscroll=()=>{
-    if(box.scrollTop + box.clientHeight >= box.scrollHeight - 140){
-      loadMoreForumPosts();
-    }
-  };
 }
 
 function forumPostPreviewHtml(post){
@@ -1171,11 +1124,7 @@ function forumPostPreviewHtml(post){
 function renderForumPosts(){
   const box=$("#forumPosts");
   if(!box) return;
-  if(!state.forumPosts.length){
-    box.innerHTML=`<div class="forum-empty">Chưa có bài viết nào.<br>Hãy mở đầu cuộc trò chuyện đầu tiên nhé 🙂</div>`;
-    bindForumLazyLoad();
-    return;
-  }
+  if(!state.forumPosts.length){box.innerHTML=`<div class="forum-empty">Chưa có bài viết nào.<br>Hãy mở đầu cuộc trò chuyện đầu tiên nhé 🙂</div>`;return;}
   box.innerHTML=state.forumPosts.map(post=>{
     const id=Number(post.id);
     const open=Number(state.forumOpenPostId)===id;
@@ -1188,8 +1137,7 @@ function renderForumPosts(){
       <div class="forum-post-footer"><button class="forum-comment-link" type="button" data-forum-open-post="${id}">${open?"Ẩn bình luận":"💬"} ${commentCount} bình luận</button>${ownActions}</div>
       ${open?renderForumComments(post,comments):""}
     </article>`;
-  }).join("")+(!state.forumHasMore?`<div class="forum-load-more-end">Đã tải hết bài viết.</div>`:`<div class="forum-load-more-state">${state.forumLoadingMore?"Đang tải thêm…":"Kéo xuống để tải thêm bài viết"}</div>`);
-  bindForumLazyLoad();
+  }).join("");
   $$('[data-forum-content-toggle]',box).forEach(btn=>btn.addEventListener("click",()=>{
     const id=Number(btn.dataset.forumContentToggle||0);
     if(!id)return;
@@ -1326,6 +1274,7 @@ async function createForumComment(postId){
     await api(`/forum/posts/${encodeURIComponent(postId)}/comments`,{method:"POST",body:{content}});
     if(input)input.value="";
     await loadForumComments(postId);
+    await loadForumPosts();
   }catch(e){toast(e.message||"Không thể gửi bình luận", "error");}
   finally{if(btn)btn.disabled=false;}
 }
@@ -2028,12 +1977,10 @@ function phrasingResetState(){
 
 async function launchPhrasing(options={}){
   await exitChatNowBeforeSwitch();
-  // Phrasing is a dedicated feature session. Keep the five most recent chat turns
-  // only as context for the server-generated task, then reset the visible session.
-  const incomingContext = Array.isArray(options.context)
-    ? options.context.slice(-5)
-    : state.chatHistory.slice(-5);
-  state.phrasingContext = incomingContext;
+  // Phrasing is a dedicated session. NEVER inherit history from the general chat,
+  // Free Chat Tutor, Chat Now, or a previous Phrasing session.
+  const incomingContext = [];
+  state.phrasingContext = [];
   state.view="chat";
   state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;
   state.chatboxNew=true;
@@ -2046,11 +1993,14 @@ async function launchPhrasing(options={}){
   try{
     const d=await api("/learning/phrasing/start",{
       method:"POST",
-      body:{course_id:Number(state.selectedCourseId||0),chat_history:incomingContext.slice(-5)}
+      body:{course_id:Number(state.selectedCourseId||0),chat_history:[]}
     });
     state.phrasingTask=String(d.task||d.reply||"").trim();
     bubble.blocks=[{type:"text",text:d.reply||"👉 Hãy diễn đạt ý này bằng tiếng Anh nhé."}];
-    if(d.reply) rememberChatTurn("model",d.reply);
+    if(d.reply){
+      state.phrasingContext=[{role:"model",text:d.reply}];
+      rememberChatTurn("model",d.reply);
+    }
     renderMessages();
   }catch(e){
     state.phrasingTask="";
@@ -2064,7 +2014,11 @@ async function sendPhrasingAnswer(answer){
   if(!text || !state.phrasingTask) return;
   addChatMessage("user",textBlocksFromReply(text));
   rememberChatTurn("user",text);
-  const recentHistory=state.phrasingContext.slice(-5).concat(state.chatHistory.slice(-5)).slice(-5);
+  // Only the current Phrasing session is allowed here.
+  state.phrasingContext = (Array.isArray(state.phrasingContext) ? state.phrasingContext : []);
+  state.phrasingContext.push({role:"user",text});
+  state.phrasingContext = state.phrasingContext.slice(-5);
+  const recentHistory=state.phrasingContext.slice(-5);
   const bubble=addChatMessage("model",[{type:"typing",text:"Doraemon đang xem cách diễn đạt của cậu..."}]);
   renderMessages();
   try{
@@ -2073,7 +2027,11 @@ async function sendPhrasingAnswer(answer){
       body:{course_id:Number(state.selectedCourseId||0),task:state.phrasingTask,answer:text,chat_history:recentHistory}
     });
     bubble.blocks=[{type:"text",text:d.reply||"Doraemon chưa có phản hồi."}];
-    if(d.reply) rememberChatTurn("model",d.reply);
+    if(d.reply){
+      state.phrasingContext.push({role:"model",text:d.reply});
+      state.phrasingContext = state.phrasingContext.slice(-5);
+      rememberChatTurn("model",d.reply);
+    }
     renderMessages();
     state.phrasingTask="";
     bubble.blocks.push({type:"choice",options:[{label:"Bài Phrasing tiếp theo",action:"phrasing_next",display_label:"Bài Phrasing tiếp theo"}]});
@@ -2085,9 +2043,9 @@ async function sendPhrasingAnswer(answer){
 }
 
 async function startNextPhrasing(){
-  const context=state.chatHistory.slice(-5);
   state.phrasingTask="";
-  await launchPhrasing({context});
+  state.phrasingContext=[];
+  await launchPhrasing();
 }
 
 async function startReviewChat(){await exitChatNowBeforeSwitch();closeLearnerPanel();state.view="chat";state.chatboxId=crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`;state.chatboxNew=true;state.messages=[];state.chatHistory=[];state.activeFeature="";state.activeFeatureItem=null;await renderChat($("#appContent"));await sendAction("review_open","Mở nội dung ôn tập");}
