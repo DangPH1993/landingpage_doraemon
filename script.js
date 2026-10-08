@@ -799,8 +799,9 @@ function ensureForumStyles(){
     .forum-notify-badge.hidden{display:none}
     .forum-new-post-badge{position:absolute;right:-5px;top:-7px;min-width:12px;height:12px;padding:0 2px;border-radius:999px;background:#ef2222;color:#fff;border:2px solid #fff;box-sizing:border-box;display:grid;place-items:center;font-size:8px;font-weight:900;line-height:1;box-shadow:0 0 0 1px rgba(239,68,68,.10)}
     .forum-new-post-badge.hidden{display:none}
-    .forum-new-post-button{width:44px;height:24px;border-radius:5px;border:1px solid #d8d8d8;background:#fff;color:#e11;font-size:9px;font-weight:1000;letter-spacing:-.2px;line-height:1;white-space:nowrap;font-family:Arial,sans-serif;box-shadow:0 1px 2px rgba(0,0,0,.06)}
-    .forum-new-post-button:hover{background:#fff7f7;border-color:#f0a0a0;color:#d00}
+    .forum-new-post-button{width:44px;height:24px;border:0;background:transparent;color:#e11;padding:0;font-size:9px;font-weight:1000;letter-spacing:-.2px;line-height:1;white-space:nowrap;font-family:Arial,sans-serif;cursor:pointer}
+    .forum-new-post-button.hidden{display:none}
+    .forum-new-post-button:hover{background:transparent;border:0;color:#d00;text-decoration:underline}
     .forum-body{display:flex;flex-direction:column;min-height:0;flex:1}
     .forum-list-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid #edf1f5;background:#fff;flex:none}
     .forum-list-title{font-size:10px;font-weight:900;color:#728198;text-transform:uppercase;letter-spacing:.03em}
@@ -932,12 +933,17 @@ function bindForumEmojiButtons(root){
 
 async function renderForumNewPostBadge(){
   const badge=$("#forumNewPostBadge");
-  if(!badge) return;
+  const button=$("#forumNewPostBtn");
+  if(!button) return;
   const count=forumSanitizedCount(state.forumNewPostCount);
-  badge.classList.toggle("hidden",count<1);
-  if(count>0) badge.textContent="!";
-  badge.title=count?`${count} bài đăng mới chưa xem`:"";
-  badge.setAttribute("aria-hidden",count?"false":"true");
+  button.classList.toggle("hidden",count<1);
+  button.setAttribute("aria-hidden",count?"false":"true");
+  button.title=count?`${count} bài đăng mới chưa xem`:"";
+  if(badge){
+    badge.classList.toggle("hidden",count<1);
+    if(count>0) badge.textContent="!";
+    badge.setAttribute("aria-hidden",count?"false":"true");
+  }
 }
 
 function updateForumNewPostState(posts, markSeen=false){
