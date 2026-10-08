@@ -1917,7 +1917,12 @@ async function renderChat(el) {
       });
       section.style.display=sectionVisible?"":"none";
       const count=section.querySelector(".lesson-section-count");
-      if(count) count.textContent=`${sectionVisible} bài`;
+      if(count){
+        const avgText=(String(section.dataset.sectionType||"") === "Bài tập" && summary?.exercise_average_score_10!=null)
+          ? ` · ĐTB ${Number(summary.exercise_average_score_10).toFixed(1)}/10`
+          : "";
+        count.textContent=`${sectionVisible} bài${avgText}`;
+      }
     });
     if(filterEmpty) filterEmpty.style.display=visibleCount?"none":"";
   };
