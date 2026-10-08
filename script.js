@@ -37,6 +37,7 @@ const state = {
   forumLastSeenPostId: 0,
   forumEditingPostId: null,
   forumExpandedPostContentIds: {},
+  forumLoadSeq: 0,
 };
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -1052,6 +1053,18 @@ function renderForumStrip(){
       <div id="forumPosts" class="forum-posts"><div class="forum-loading">Đang tải forum…</div></div>
     </div>`;
   $("#forumCollapseBtn").onclick=async()=>{
+    const willCollapse = state.forumExpanded;
+    if(willCollapse){
+      // Invalidate any in-flight Forum load before re-rendering the collapsed strip.
+      // A late response must never resurrect BUZZ after the user has already viewed
+      // the current posts.
+      state.forumLoadSeq += 1;
+      const latest = (Array.isArray(state.forumPosts)?state.forumPosts:[]).reduce((max,p)=>Math.max(max,Number(p?.id)||0),0);
+      if(latest){
+        forumSaveLastSeenPostId(latest);
+      }
+      state.forumNewPostCount = 0;
+    }
     state.forumExpanded=!state.forumExpanded;
     renderForumStrip();
     if(state.forumExpanded){await loadForumPosts(true); await refreshForumNotificationCount();}
@@ -1076,13 +1089,20 @@ function renderForumStrip(){
 async function loadForumPosts(markSeen=false){
   const box=$("#forumPosts");
   if(!box) return;
+  const requestSeq = ++state.forumLoadSeq;
   box.innerHTML=`<div class="forum-loading">Đang tải bài viết…</div>`;
   try{
     const d=await api("/forum/posts?limit=20");
+    // Ignore a stale response, e.g. when the user expanded then immediately
+    // collapsed the Forum while the request was still in flight.
+    if(requestSeq !== state.forumLoadSeq) return;
     state.forumPosts=Array.isArray(d?.posts)?d.posts:[];
     renderForumPosts();
     updateForumNewPostState(state.forumPosts,markSeen);
-  }catch(e){box.innerHTML=`<div class="forum-empty">Không tải được Forum.<br>${escapeHtml(e.message||"")}</div>`;}
+  }catch(e){
+    if(requestSeq !== state.forumLoadSeq) return;
+    box.innerHTML=`<div class="forum-empty">Không tải được Forum.<br>${escapeHtml(e.message||"")}</div>`;
+  }
 }
 
 function forumPostPreviewHtml(post){
