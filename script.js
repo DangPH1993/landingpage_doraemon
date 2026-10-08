@@ -1032,7 +1032,7 @@ function renderForumStrip(){
     <header class="forum-head">
       <div class="forum-head-copy"><strong>Forum cộng đồng</strong><small>@${escapeHtml(forumCurrentUsername())}</small></div>
       <div class="forum-head-actions">
-        <button class="forum-icon-button forum-new-post-button" type="button" id="forumNewPostBtn" aria-label="Bài đăng mới chưa xem">BUZZ !!!</button>
+        <button class="forum-icon-button forum-new-post-button hidden" type="button" id="forumNewPostBtn" aria-label="Bài đăng mới chưa xem">BUZZ !!!</button>
         <button class="forum-icon-button" type="button" id="forumBellBtn" aria-label="Thông báo forum">🔔<span id="forumUnreadBadge" class="forum-notify-badge hidden"></span></button>
         <button class="forum-icon-button forum-collapse-btn" type="button" id="forumCollapseBtn" aria-label="Mở/đóng Forum">›</button>
       </div>
@@ -1082,6 +1082,10 @@ function renderForumStrip(){
   $("#forumPostBtn").onclick=createForumPost;
   $("#forumPostContent")?.addEventListener("keydown",e=>{if(e.key==='Enter'&&e.ctrlKey)createForumPost();});
   bindForumEmojiButtons(root);
+  // The Forum header is rebuilt on every expand/collapse, so always re-apply the
+  // current unread state to the newly-created BUZZ element. Without this, the
+  // freshly rendered button is visible by default even when there are no new posts.
+  renderForumNewPostBadge();
   renderForumNotificationBadge();
   renderForumNotificationLine();
 }
