@@ -1,4 +1,4 @@
-// Doraemon Web Client v84.10 – Ephemeral Forum notifications and Admin polling only while chat is open
+// Doraemon Web Client v84.11 – GA4 runtime integration controlled from Admin settings
 const API_BASE = (() => {
   const meta = document.querySelector('meta[name="doraemon-api-base"]');
   const configured = (window.DORAEMON_API_BASE || meta?.content || '').trim();
@@ -6,6 +6,62 @@ const API_BASE = (() => {
 })();
 const TOKEN_KEY = "doraemon_web_access_token";
 const PROFILE_KEY = "doraemon_web_profile";
+
+
+// GA4 is configured centrally in Admin. Only basic virtual page views are sent;
+// never attach account IDs, emails, usernames, or chat content to Analytics.
+window.__doraemonGaMeasurementId = "";
+window.__doraemonGaLastPagePath = "";
+function doraemonAnalyticsPagePath(){
+  if(typeof isResetPasswordRoute==="function" && isResetPasswordRoute()) return "";
+  const basePath=location.pathname || "/";
+  return route()==="app" ? `${basePath}#/app` : basePath;
+}
+function trackDoraemonAnalyticsPageView(){
+  const measurementId=window.__doraemonGaMeasurementId;
+  if(!measurementId || typeof window.gtag!=="function") return;
+  const pagePath=doraemonAnalyticsPagePath();
+  if(!pagePath || pagePath===window.__doraemonGaLastPagePath) return;
+  window.__doraemonGaLastPagePath=pagePath;
+  window.gtag("event","page_view",{
+    page_title:document.title,
+    page_path:pagePath,
+    page_location:`${location.origin}${pagePath}`
+  });
+}
+async function initDoraemonGoogleAnalytics(){
+  // Password-reset tokens must never be part of an Analytics session.
+  if(typeof isResetPasswordRoute==="function" && isResetPasswordRoute())return;
+  try{
+    const response=await fetch(`${API_BASE}/public/analytics-config`,{method:"GET",cache:"no-store",credentials:"omit"});
+    if(!response.ok)return;
+    const cfg=await response.json();
+    const measurementId=String(cfg?.measurement_id||"").trim().toUpperCase();
+    if(cfg?.enabled!==true || !/^G-[A-Z0-9]{4,20}$/.test(measurementId))return;
+    if(window.__doraemonGaMeasurementId===measurementId){trackDoraemonAnalyticsPageView();return;}
+    window.__doraemonGaMeasurementId=measurementId;
+    window.dataLayer=window.dataLayer||[];
+    window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};
+    window.gtag("js",new Date());
+    window.gtag("config",measurementId,{
+      send_page_view:false,
+      allow_google_signals:false,
+      allow_ad_personalization_signals:false
+    });
+    if(!document.querySelector(`script[data-doraemon-ga4="${measurementId}"]`)){
+      const tag=document.createElement("script");
+      tag.async=true;
+      tag.src=`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;
+      tag.dataset.doraemonGa4=measurementId;
+      tag.onerror=()=>console.warn("[Doraemon GA4] Không tải được Google tag.");
+      document.head.appendChild(tag);
+    }
+    trackDoraemonAnalyticsPageView();
+  }catch(error){
+    // Analytics is optional and must not affect login or learning flows.
+    console.warn("[Doraemon GA4] Không tải được cấu hình:",error?.message||error);
+  }
+}
 
 const state = {
   token: localStorage.getItem(TOKEN_KEY) || "",
@@ -2442,6 +2498,7 @@ async function boot(){
   $("#navAuthBtn").onclick=()=>state.token?location.hash="#/app":openAuth("login");
   $("#heroAuthBtn").onclick=()=>openAuth("register");
   loadAppDownloadConfig();
+  initDoraemonGoogleAnalytics();
   authForm.addEventListener("submit",async e=>{
     e.preventDefault();
     const mode=authForm.dataset.mode||"login";
@@ -2485,6 +2542,7 @@ async function boot(){
   });
   setAuthMode("login");
   window.addEventListener("hashchange",async ()=>{
+    trackDoraemonAnalyticsPageView();
     if(isResetPasswordRoute()) {
       if(state.token) { setToken("", null); state.token=""; state.profile=null; }
       renderLanding();
