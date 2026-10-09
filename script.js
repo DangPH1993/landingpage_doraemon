@@ -1,4 +1,4 @@
-// Doraemon Web Client v84.8 – Forum notifications for post owners and commenters
+// Doraemon Web Client v84.9 – Clickable Forum notifications with post navigation
 const API_BASE = (() => {
   const meta = document.querySelector('meta[name="doraemon-api-base"]');
   const configured = (window.DORAEMON_API_BASE || meta?.content || '').trim();
@@ -33,6 +33,9 @@ const state = {
   forumOpenPostId: null,
   forumComments: {},
   forumUnreadCount: 0,
+  forumNotifications: [],
+  forumNotificationsOpen: false,
+  forumNavigatingToPost: false,
   forumNewPostCount: 0,
   forumLastSeenPostId: 0,
   forumEditingPostId: null,
@@ -827,6 +830,7 @@ function ensureForumStyles(){
     .forum-posts{flex:1;overflow:auto;padding:9px;background:#f8fbff;display:grid;align-content:start;gap:8px}
     .forum-post-card{background:#fff;border:1px solid #e0e7ef;border-radius:13px;padding:10px 11px;box-shadow:0 5px 15px rgba(31,51,79,.035)}
     .forum-post-card:hover{border-color:#c8d8ea}
+    .forum-post-card.forum-post-highlight{border-color:#6489ed;box-shadow:0 0 0 3px rgba(80,116,225,.18)}
     .forum-post-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
     .forum-post-title{font-size:13px;font-weight:900;color:#1e2f48;line-height:1.35;overflow-wrap:anywhere}
     .forum-post-meta{margin-top:3px;font-size:9px;color:#8b99a9}
@@ -845,6 +849,7 @@ function ensureForumStyles(){
     .forum-own-label{font-size:9px;color:#94a3b8}
     .forum-comments{margin-top:8px;padding-top:8px;border-top:1px dashed #e3eaf2;display:grid;gap:7px}
     .forum-comment{padding:7px 8px;border-radius:9px;background:#f7faff;border:1px solid #e6edf5}
+    .forum-comment.forum-comment-highlight{border-color:#6489ed;background:#eef4ff;box-shadow:0 0 0 2px rgba(80,116,225,.16)}
     .forum-comment-author{font-size:9px;font-weight:900;color:#3d5f99}
     .forum-comment-text{margin-top:3px;font-size:10px;line-height:1.5;color:#45556a;white-space:pre-wrap;overflow-wrap:anywhere}
     .forum-comment-date{display:block;margin-top:4px;font-size:8px;color:#9aa7b7}
@@ -862,9 +867,18 @@ function ensureForumStyles(){
     .forum-emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;padding-top:6px;max-height:190px;overflow:auto}
     .forum-emoji-item{border:0;background:transparent;border-radius:7px;aspect-ratio:1/1;cursor:pointer;font-size:20px;display:grid;place-items:center}
     .forum-emoji-item:hover{background:#f1f5fa}
-    .forum-notification-line{padding:8px 10px;border-bottom:1px solid #edf2f6;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;color:#56667c}
+    .forum-notification-line{padding:8px 9px;border-bottom:1px solid #edf2f6;background:#fff;display:block;max-height:210px;overflow:auto;font-size:10px;color:#56667c;flex:none}
+    .forum-notification-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
     .forum-notification-line strong{color:#b91c1c}
     .forum-notification-read{border:0;background:transparent;color:#4169c9;font-size:9px;font-weight:900;cursor:pointer;white-space:nowrap}
+    .forum-notification-items{display:grid;gap:5px}
+    .forum-notification-item{display:grid;gap:3px;width:100%;padding:8px 9px;text-align:left;border:1px solid #e5ebf3;border-radius:9px;background:#fbfdff;color:#526176;cursor:pointer;min-width:0}
+    .forum-notification-item:hover{border-color:#9db7ee;background:#f3f7ff}
+    .forum-notification-item-title{font-size:10px;font-weight:900;color:#233954;overflow-wrap:anywhere}
+    .forum-notification-item-meta{font-size:9px;color:#75849a}
+    .forum-notification-item-preview{font-size:10px;line-height:1.4;color:#56667c;overflow-wrap:anywhere}
+    .forum-notification-item-open{font-size:9px;font-weight:900;color:#3563c7}
+    .forum-notification-empty{padding:5px 2px;color:#8190a4;font-size:10px}
     .forum-empty{padding:30px 12px;text-align:center;color:#8b99aa;font-size:11px;line-height:1.6}
     .forum-loading{padding:24px 12px;text-align:center;color:#7b8a9c;font-size:11px}
     @media(max-width:1200px){.forum-strip{width:480px}.forum-emoji-picker{width:260px}}
@@ -994,6 +1008,7 @@ async function refreshForumNotificationCount(){
   try{
     const d=await api("/forum/notifications?unread_only=true&limit=20");
     state.forumUnreadCount=forumSanitizedCount(d?.unread_count);
+    state.forumNotifications=Array.isArray(d?.notifications)?d.notifications:[];
     renderForumNotificationBadge();
     renderForumNotificationLine();
   }catch{}
@@ -1013,6 +1028,8 @@ async function markForumNotificationsRead(){
   try{
     await api("/forum/notifications/read",{method:"POST",body:{}});
     state.forumUnreadCount=0;
+    state.forumNotifications=[];
+    state.forumNotificationsOpen=false;
     renderForumNotificationBadge();
     renderForumNotificationLine();
   }catch(e){toast(e.message||"Không thể đánh dấu thông báo", "error");}
@@ -1021,12 +1038,103 @@ async function markForumNotificationsRead(){
 function renderForumNotificationLine(){
   const line=$("#forumNotificationLine");
   if(!line) return;
-  if(state.forumUnreadCount>0){
-    line.innerHTML=`<span>🔔 <strong>${state.forumUnreadCount}</strong> phản hồi mới trong các bài viết cậu đã đăng hoặc bình luận.</span><button class="forum-notification-read" type="button" id="forumMarkReadBtn">Đã xem</button>`;
-    $("#forumMarkReadBtn")?.addEventListener("click",markForumNotificationsRead);
-    line.classList.remove("hidden");
-  }else{
-    line.innerHTML=""; line.classList.add("hidden");
+  if(state.forumUnreadCount<1&&!state.forumNotificationsOpen){line.innerHTML="";line.classList.add("hidden");return;}
+  const notifications=Array.isArray(state.forumNotifications)?state.forumNotifications:[];
+  const items=notifications.map(n=>{
+    const notificationId=Number(n?.id)||0;
+    return `<button class="forum-notification-item" type="button" data-forum-notification-id="${notificationId}">
+      <span class="forum-notification-item-title">${escapeHtml(n?.title||"Bài viết Forum")}</span>
+      <span class="forum-notification-item-meta">@${escapeHtml(n?.username||"user")} đã bình luận · ${escapeHtml(forumDate(n?.created_at))}</span>
+      ${n?.comment_preview?`<span class="forum-notification-item-preview">${escapeHtml(n.comment_preview)}</span>`:""}
+      <span class="forum-notification-item-open">Mở bài viết →</span>
+    </button>`;
+  }).join("");
+  line.innerHTML=`<div class="forum-notification-head"><span>🔔 <strong>${state.forumUnreadCount}</strong> thông báo chưa xem</span><button class="forum-notification-read" type="button" id="forumMarkReadBtn">${state.forumUnreadCount>0?"Đánh dấu đã xem":"Đóng"}</button></div>${items?`<div class="forum-notification-items">${items}</div>`:`<div class="forum-notification-empty">Chưa có thông báo mới.</div>`}`;
+  $("#forumMarkReadBtn")?.addEventListener("click",()=>{
+    if(state.forumUnreadCount>0) markForumNotificationsRead();
+    else {state.forumNotificationsOpen=false;renderForumNotificationLine();}
+  });
+  $$('[data-forum-notification-id]',line).forEach(btn=>btn.addEventListener("click",async()=>{
+    const id=Number(btn.dataset.forumNotificationId)||0;
+    const notification=state.forumNotifications.find(n=>Number(n?.id)===id);
+    if(notification) await openForumNotification(notification);
+  }));
+  line.classList.remove("hidden");
+}
+
+async function openForumNotification(notification){
+  const postId=Number(notification?.post_id)||0;
+  const notificationId=Number(notification?.id)||0;
+  const commentId=Number(notification?.comment_id)||0;
+  if(!postId){toast("Thông báo này không còn liên kết tới bài viết.","error");return;}
+  try{
+    // Prevent the normal lazy loader from racing with direct navigation.
+    state.forumNavigatingToPost=true;
+    if(!state.forumExpanded){
+      state.forumExpanded=true;
+      renderForumStrip();
+      await loadForumPosts(false);
+    }else if(!$("#forumPosts")||!state.forumPosts.length){
+      await loadForumPosts(false);
+    }
+
+    // Pause lazy loading while paging directly toward the target post.
+    if(state.forumLoadObserver){state.forumLoadObserver.disconnect();state.forumLoadObserver=null;}
+    let attempts=0;
+    while(!state.forumPosts.some(p=>Number(p?.id)===postId)&&state.forumHasMore&&attempts<1000){
+      const requestSeq=state.forumLoadSeq;
+      const limit=Number(state.forumPageSize)||20;
+      const offset=Number(state.forumNextOffset)||0;
+      const d=await api(`/forum/posts?limit=${limit}&offset=${offset}`);
+      if(requestSeq!==state.forumLoadSeq||!state.forumExpanded){
+        state.forumNavigatingToPost=false;
+        if(state.forumExpanded) renderForumPosts();
+        return;
+      }
+      const incoming=Array.isArray(d?.posts)?d.posts:[];
+      const existingIds=new Set(state.forumPosts.map(p=>Number(p?.id)||0));
+      state.forumPosts=[...state.forumPosts,...incoming.filter(p=>!existingIds.has(Number(p?.id)||0))];
+      const nextOffset=Number(d?.next_offset);
+      state.forumNextOffset=Number.isFinite(nextOffset)?nextOffset:offset+incoming.length;
+      state.forumHasMore=typeof d?.has_more==="boolean"?d.has_more:incoming.length>=limit;
+      attempts++;
+      renderForumPosts();
+      if(!incoming.length) break;
+    }
+
+    if(!state.forumPosts.some(p=>Number(p?.id)===postId)){
+      state.forumNavigatingToPost=false;
+      renderForumPosts();
+      toast("Không tìm thấy bài viết từ thông báo này. Có thể bài viết đã bị xóa.","error");
+      return;
+    }
+
+    state.forumOpenPostId=postId;
+    renderForumPosts();
+    await loadForumComments(postId);
+    state.forumNavigatingToPost=false;
+    renderForumPosts();
+
+    const box=$("#forumPosts");
+    const card=box?.querySelector(`[data-forum-post-id="${CSS.escape(String(postId))}"]`);
+    const target=commentId?card?.querySelector(`[data-forum-comment-id="${CSS.escape(String(commentId))}"]`):null;
+    const scrollTarget=target||card;
+    if(box&&scrollTarget){
+      const boxRect=box.getBoundingClientRect();
+      const targetRect=scrollTarget.getBoundingClientRect();
+      box.scrollTo({top:Math.max(0,box.scrollTop+targetRect.top-boxRect.top-12),behavior:"smooth"});
+      scrollTarget.classList.add(target?"forum-comment-highlight":"forum-post-highlight");
+      window.setTimeout(()=>scrollTarget.classList.remove(target?"forum-comment-highlight":"forum-post-highlight"),2600);
+    }
+
+    if(notificationId){
+      try{await api(`/forum/notifications/${encodeURIComponent(notificationId)}/read`,{method:"POST",body:{}});await refreshForumNotificationCount();}
+      catch(e){console.warn("Could not mark Forum notification read",e);}
+    }
+  }catch(e){
+    state.forumNavigatingToPost=false;
+    if(state.forumExpanded) renderForumPosts();
+    toast(e.message||"Không thể mở bài viết từ thông báo.","error");
   }
 }
 
@@ -1082,7 +1190,9 @@ function renderForumStrip(){
   };
   $("#forumBellBtn").onclick=async()=>{
     if(!state.forumExpanded){state.forumExpanded=true;renderForumStrip();await loadForumPosts();}
-    await markForumNotificationsRead();
+    state.forumNotificationsOpen=true;
+    await refreshForumNotificationCount();
+    renderForumNotificationLine();
   };
   $("#forumCreateBtn").onclick=()=>openForumComposerForCreate();
   $("#forumComposeClose").onclick=()=>closeForumComposer();
@@ -1179,6 +1289,11 @@ function bindForumLazyLoad(){
   if(state.forumLoadObserver){
     state.forumLoadObserver.disconnect();
     state.forumLoadObserver=null;
+  }
+
+  if(state.forumNavigatingToPost){
+    box.onscroll=null;
+    return;
   }
 
   // Scroll event remains as a fallback.
@@ -1278,7 +1393,7 @@ function renderForumPosts(){
 }
 
 function renderForumComments(post,comments){
-  return `<div class="forum-comments">${comments.length?comments.map(c=>`<div class="forum-comment"><div class="forum-comment-author">@${escapeHtml(c.username||"user")}</div><div class="forum-comment-text">${escapeHtml(c.content||"")}</div><small class="forum-comment-date">${escapeHtml(forumDate(c.created_at))}</small></div>`).join(""):`<div class="forum-empty" style="padding:8px">Chưa có bình luận. Hãy là người đầu tiên trả lời.</div>`}
+  return `<div class="forum-comments">${comments.length?comments.map(c=>`<div class="forum-comment" data-forum-comment-id="${Number(c.id)||0}"><div class="forum-comment-author">@${escapeHtml(c.username||"user")}</div><div class="forum-comment-text">${escapeHtml(c.content||"")}</div><small class="forum-comment-date">${escapeHtml(forumDate(c.created_at))}</small></div>`).join(""):`<div class="forum-empty" style="padding:8px">Chưa có bình luận. Hãy là người đầu tiên trả lời.</div>`}
     <div class="forum-comment-compose">
       <div class="forum-emoji-wrap">
         <textarea id="forumCommentInput-${Number(post.id)}" class="forum-comment-input" data-forum-comment-input="${Number(post.id)}" maxlength="3000" rows="2" placeholder="Viết bình luận…"></textarea>
