@@ -1,4 +1,4 @@
-// Doraemon Web Client v84 – Forum unread-new-post indicator
+// Doraemon Web Client v84.8 – Forum notifications for post owners and commenters
 const API_BASE = (() => {
   const meta = document.querySelector('meta[name="doraemon-api-base"]');
   const configured = (window.DORAEMON_API_BASE || meta?.content || '').trim();
@@ -1022,7 +1022,7 @@ function renderForumNotificationLine(){
   const line=$("#forumNotificationLine");
   if(!line) return;
   if(state.forumUnreadCount>0){
-    line.innerHTML=`<span>🔔 <strong>${state.forumUnreadCount}</strong> phản hồi mới cho bài của cậu.</span><button class="forum-notification-read" type="button" id="forumMarkReadBtn">Đã xem</button>`;
+    line.innerHTML=`<span>🔔 <strong>${state.forumUnreadCount}</strong> phản hồi mới trong các bài viết cậu đã đăng hoặc bình luận.</span><button class="forum-notification-read" type="button" id="forumMarkReadBtn">Đã xem</button>`;
     $("#forumMarkReadBtn")?.addEventListener("click",markForumNotificationsRead);
     line.classList.remove("hidden");
   }else{
