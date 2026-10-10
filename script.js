@@ -1,4 +1,4 @@
-// Doraemon Web Client v84.9 – Controlled Vocemundi image rendering
+// Doraemon Web Client v84.10 – Controlled Vocemundi image + bold formatting
 const API_BASE = (() => {
   const meta = document.querySelector('meta[name="doraemon-api-base"]');
   const configured = (window.DORAEMON_API_BASE || meta?.content || '').trim();
@@ -831,6 +831,11 @@ function ensureForumStyles(){
     .forum-post-title{font-size:13px;font-weight:900;color:#1e2f48;line-height:1.35;overflow-wrap:anywhere}
     .forum-post-meta{margin-top:3px;font-size:9px;color:#8b99a9}
     .forum-post-content{margin:8px 0 7px;font-size:11px;color:#43536a;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
+    .forum-post-content.vocemundi-rich{white-space:normal}
+    .forum-post-content.vocemundi-rich p{margin:0 0 9px}
+    .forum-post-content.vocemundi-rich p:last-child{margin-bottom:0}
+    .forum-post-content.vocemundi-rich strong,.forum-post-content.vocemundi-rich b{font-weight:800;color:#263b59}
+    .forum-post-content.vocemundi-rich em,.forum-post-content.vocemundi-rich i{font-style:italic}
     .forum-post-content-toggle{border:0;background:transparent;padding:0;color:#3563c7;font-size:10px;font-weight:900;cursor:pointer}
     .forum-post-content-toggle:hover{text-decoration:underline}
     .forum-load-more-state,.forum-load-more-end{padding:10px 6px 14px;text-align:center;font-size:9px;color:#93a0b0}.forum-load-more-state{font-weight:700}.forum-load-more-end{color:#a8b2bf}
@@ -1305,20 +1310,42 @@ function forumExtractVocemundiImages(content, username){
   return {visible:visible.trim(),imageHtml};
 }
 
+function forumVocemundiRichTextHtml(value){
+  // Source article text is stored as Markdown markers, not raw HTML. Escape first,
+  // then create only the tiny <strong>/<em> allow-list needed for editorial formatting.
+  return String(value??"").split(/\n{2,}/).map(paragraph=>{
+    const safe=escapeHtml(paragraph)
+      .replace(/\*\*([^*\n]+)\*\*/g,"<strong>$1</strong>")
+      .replace(/\*([^*\n]+)\*/g,"<em>$1</em>")
+      .replace(/\n/g,"<br>");
+    return `<p>${safe}</p>`;
+  }).join("");
+}
+function forumVocemundiTruncateMarkdown(value,maxWords){
+  const words=String(value??"").trim().split(/\s+/).filter(Boolean);
+  if(words.length<=maxWords) return String(value??"").trim();
+  let preview=words.slice(0,maxWords).join(" ");
+  const boldMarkers=(preview.match(/\*\*/g)||[]).length;
+  if(boldMarkers%2===1) preview+="**";
+  return preview;
+}
 function forumPostPreviewHtml(post){
   const tracked=forumExtractVocemundiCounter(post.content||"",post.username);
   const media=forumExtractVocemundiImages(tracked.visible,post.username);
   const full=media.visible;
   const pixelHtml=tracked.pixelHtml;
   const imageHtml=media.imageHtml;
-  const words=full.trim() ? full.trim().split(/\s+/) : [];
+  const isVocemundi=String(post.username||"").toLowerCase()==="vocemundinews";
+  const words=full.trim() ? full.replace(/\*\*/g,"").replace(/\*/g,"").trim().split(/\s+/).filter(Boolean) : [];
   const id=Number(post.id||0);
   const expanded=!!state.forumExpandedPostContentIds[id];
+  const renderContent=value=>isVocemundi?forumVocemundiRichTextHtml(value):escapeHtml(value);
+  const contentClass=isVocemundi?"forum-post-content vocemundi-rich":"forum-post-content";
   if(words.length<=100 || expanded){
-    return `${imageHtml}<div class="forum-post-content">${escapeHtml(full)}</div>${pixelHtml}${words.length>100?`<button type="button" class="forum-post-content-toggle" data-forum-content-toggle="${id}">Thu gọn</button>`:""}`;
+    return `${imageHtml}<div class="${contentClass}">${renderContent(full)}</div>${pixelHtml}${words.length>100?`<button type="button" class="forum-post-content-toggle" data-forum-content-toggle="${id}">Thu gọn</button>`:""}`;
   }
-  const preview=words.slice(0,100).join(" ");
-  return `${imageHtml}<div class="forum-post-content">${escapeHtml(preview)}…</div>${pixelHtml}<button type="button" class="forum-post-content-toggle" data-forum-content-toggle="${id}">Xem thêm</button>`;
+  const preview=isVocemundi?forumVocemundiTruncateMarkdown(full,100):words.slice(0,100).join(" ");
+  return `${imageHtml}<div class="${contentClass}">${renderContent(preview)}<span>…</span></div>${pixelHtml}<button type="button" class="forum-post-content-toggle" data-forum-content-toggle="${id}">Xem thêm</button>`;
 }
 
 function renderForumPosts(){
