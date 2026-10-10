@@ -1,4 +1,4 @@
-// Doraemon Web Client v84.11 – GA4 runtime integration controlled from Admin settings
+// Doraemon Web Client v84.9 – Controlled Vocemundi image rendering
 const API_BASE = (() => {
   const meta = document.querySelector('meta[name="doraemon-api-base"]');
   const configured = (window.DORAEMON_API_BASE || meta?.content || '').trim();
@@ -6,62 +6,6 @@ const API_BASE = (() => {
 })();
 const TOKEN_KEY = "doraemon_web_access_token";
 const PROFILE_KEY = "doraemon_web_profile";
-
-
-// GA4 is configured centrally in Admin. Only basic virtual page views are sent;
-// never attach account IDs, emails, usernames, or chat content to Analytics.
-window.__doraemonGaMeasurementId = "";
-window.__doraemonGaLastPagePath = "";
-function doraemonAnalyticsPagePath(){
-  if(typeof isResetPasswordRoute==="function" && isResetPasswordRoute()) return "";
-  const basePath=location.pathname || "/";
-  return route()==="app" ? `${basePath}#/app` : basePath;
-}
-function trackDoraemonAnalyticsPageView(){
-  const measurementId=window.__doraemonGaMeasurementId;
-  if(!measurementId || typeof window.gtag!=="function") return;
-  const pagePath=doraemonAnalyticsPagePath();
-  if(!pagePath || pagePath===window.__doraemonGaLastPagePath) return;
-  window.__doraemonGaLastPagePath=pagePath;
-  window.gtag("event","page_view",{
-    page_title:document.title,
-    page_path:pagePath,
-    page_location:`${location.origin}${pagePath}`
-  });
-}
-async function initDoraemonGoogleAnalytics(){
-  // Password-reset tokens must never be part of an Analytics session.
-  if(typeof isResetPasswordRoute==="function" && isResetPasswordRoute())return;
-  try{
-    const response=await fetch(`${API_BASE}/public/analytics-config`,{method:"GET",cache:"no-store",credentials:"omit"});
-    if(!response.ok)return;
-    const cfg=await response.json();
-    const measurementId=String(cfg?.measurement_id||"").trim().toUpperCase();
-    if(cfg?.enabled!==true || !/^G-[A-Z0-9]{4,20}$/.test(measurementId))return;
-    if(window.__doraemonGaMeasurementId===measurementId){trackDoraemonAnalyticsPageView();return;}
-    window.__doraemonGaMeasurementId=measurementId;
-    window.dataLayer=window.dataLayer||[];
-    window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};
-    window.gtag("js",new Date());
-    window.gtag("config",measurementId,{
-      send_page_view:false,
-      allow_google_signals:false,
-      allow_ad_personalization_signals:false
-    });
-    if(!document.querySelector(`script[data-doraemon-ga4="${measurementId}"]`)){
-      const tag=document.createElement("script");
-      tag.async=true;
-      tag.src=`https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;
-      tag.dataset.doraemonGa4=measurementId;
-      tag.onerror=()=>console.warn("[Doraemon GA4] Không tải được Google tag.");
-      document.head.appendChild(tag);
-    }
-    trackDoraemonAnalyticsPageView();
-  }catch(error){
-    // Analytics is optional and must not affect login or learning flows.
-    console.warn("[Doraemon GA4] Không tải được cấu hình:",error?.message||error);
-  }
-}
 
 const state = {
   token: localStorage.getItem(TOKEN_KEY) || "",
@@ -89,9 +33,6 @@ const state = {
   forumOpenPostId: null,
   forumComments: {},
   forumUnreadCount: 0,
-  forumNotifications: [],
-  forumNotificationsOpen: false,
-  forumNavigatingToPost: false,
   forumNewPostCount: 0,
   forumLastSeenPostId: 0,
   forumEditingPostId: null,
@@ -729,7 +670,6 @@ async function resetPassword(token, newPassword) {
 async function logout(showToast = true) {
   if(state.chatNow) await endChatNowSession(true);
   stopAdminUnreadPolling();
-  window.clearInterval(window.__adminPoll); window.__adminPoll=null;
   stopForumPolling();
   state.token = ""; state.profile = null; state.courses = []; state.chatHistory = []; state.messages = []; state.chatboxNew = true; state.showCollocationOnFirstChat = false; state.activeFeature = ""; state.activeFeatureItem = null; sessionStorage.removeItem("doraemon_features_shown_this_login");
   sessionStorage.removeItem("doraemon_collocation_shown_this_login");
@@ -799,44 +739,32 @@ function ensureAdminUnreadStyles(){
   document.head.appendChild(style);
 }
 
-function clearAdminUnreadBadgeLocally(){
-  const badge=document.getElementById("adminUnreadBadge");
-  if(!badge) return;
-  badge.textContent="";
-  badge.classList.add("hidden");
-  badge.removeAttribute("aria-label");
-}
-
 async function refreshAdminUnreadBadge(){
   const badge=document.getElementById("adminUnreadBadge");
   if(!badge || !state.token) return;
   try{
-    const d=await api("/admin-chat/unread-count");
-    // Opening Chat with Admin marks its current messages read. Do not let a
-    // delayed initial count request restore a stale badge during this session.
-    if(window.__adminChatOpenedSinceLoad){clearAdminUnreadBadgeLocally();return;}
-    const unread=Math.max(0,Number(d?.unread_count)||0);
+    const d=await api("/admin-chat/history?limit=500&mark_read=false");
+    const unread=(d.messages||[]).filter(m=>m?.sender==='admin' && !m?.is_read).length;
     if(unread>0){
       badge.textContent=`🔔 ${unread>99?'99+':unread}`;
       badge.classList.remove("hidden");
       badge.setAttribute("aria-label",`${unread} tin nhắn mới từ admin`);
     }else{
-      clearAdminUnreadBadgeLocally();
+      badge.textContent="";
+      badge.classList.add("hidden");
+      badge.removeAttribute("aria-label");
     }
   }catch{}
 }
 
-// This runs once when the authenticated app shell is loaded, not on an interval.
-function loadAdminUnreadBadge(){
+function startAdminUnreadPolling(){
   ensureAdminUnreadStyles();
   window.clearInterval(window.__adminUnreadPoll);
-  window.__adminUnreadPoll=null;
-  window.__adminChatOpenedSinceLoad=false;
   refreshAdminUnreadBadge();
+  window.__adminUnreadPoll=setInterval(refreshAdminUnreadBadge,4000);
 }
 
 function stopAdminUnreadPolling(){
-  // Kept as a cleanup helper for logout; the badge no longer has a poll timer.
   window.clearInterval(window.__adminUnreadPoll);
   window.__adminUnreadPoll=null;
 }
@@ -899,7 +827,6 @@ function ensureForumStyles(){
     .forum-posts{flex:1;overflow:auto;padding:9px;background:#f8fbff;display:grid;align-content:start;gap:8px}
     .forum-post-card{background:#fff;border:1px solid #e0e7ef;border-radius:13px;padding:10px 11px;box-shadow:0 5px 15px rgba(31,51,79,.035)}
     .forum-post-card:hover{border-color:#c8d8ea}
-    .forum-post-card.forum-post-highlight{border-color:#6489ed;box-shadow:0 0 0 3px rgba(80,116,225,.18)}
     .forum-post-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
     .forum-post-title{font-size:13px;font-weight:900;color:#1e2f48;line-height:1.35;overflow-wrap:anywhere}
     .forum-post-meta{margin-top:3px;font-size:9px;color:#8b99a9}
@@ -918,7 +845,6 @@ function ensureForumStyles(){
     .forum-own-label{font-size:9px;color:#94a3b8}
     .forum-comments{margin-top:8px;padding-top:8px;border-top:1px dashed #e3eaf2;display:grid;gap:7px}
     .forum-comment{padding:7px 8px;border-radius:9px;background:#f7faff;border:1px solid #e6edf5}
-    .forum-comment.forum-comment-highlight{border-color:#6489ed;background:#eef4ff;box-shadow:0 0 0 2px rgba(80,116,225,.16)}
     .forum-comment-author{font-size:9px;font-weight:900;color:#3d5f99}
     .forum-comment-text{margin-top:3px;font-size:10px;line-height:1.5;color:#45556a;white-space:pre-wrap;overflow-wrap:anywhere}
     .forum-comment-date{display:block;margin-top:4px;font-size:8px;color:#9aa7b7}
@@ -936,18 +862,9 @@ function ensureForumStyles(){
     .forum-emoji-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:2px;padding-top:6px;max-height:190px;overflow:auto}
     .forum-emoji-item{border:0;background:transparent;border-radius:7px;aspect-ratio:1/1;cursor:pointer;font-size:20px;display:grid;place-items:center}
     .forum-emoji-item:hover{background:#f1f5fa}
-    .forum-notification-line{padding:8px 9px;border-bottom:1px solid #edf2f6;background:#fff;display:block;max-height:210px;overflow:auto;font-size:10px;color:#56667c;flex:none}
-    .forum-notification-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+    .forum-notification-line{padding:8px 10px;border-bottom:1px solid #edf2f6;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;color:#56667c}
     .forum-notification-line strong{color:#b91c1c}
     .forum-notification-read{border:0;background:transparent;color:#4169c9;font-size:9px;font-weight:900;cursor:pointer;white-space:nowrap}
-    .forum-notification-items{display:grid;gap:5px}
-    .forum-notification-item{display:grid;gap:3px;width:100%;padding:8px 9px;text-align:left;border:1px solid #e5ebf3;border-radius:9px;background:#fbfdff;color:#526176;cursor:pointer;min-width:0}
-    .forum-notification-item:hover{border-color:#9db7ee;background:#f3f7ff}
-    .forum-notification-item-title{font-size:10px;font-weight:900;color:#233954;overflow-wrap:anywhere}
-    .forum-notification-item-meta{font-size:9px;color:#75849a}
-    .forum-notification-item-preview{font-size:10px;line-height:1.4;color:#56667c;overflow-wrap:anywhere}
-    .forum-notification-item-open{font-size:9px;font-weight:900;color:#3563c7}
-    .forum-notification-empty{padding:5px 2px;color:#8190a4;font-size:10px}
     .forum-empty{padding:30px 12px;text-align:center;color:#8b99aa;font-size:11px;line-height:1.6}
     .forum-loading{padding:24px 12px;text-align:center;color:#7b8a9c;font-size:11px}
     @media(max-width:1200px){.forum-strip{width:480px}.forum-emoji-picker{width:260px}}
@@ -1077,7 +994,6 @@ async function refreshForumNotificationCount(){
   try{
     const d=await api("/forum/notifications?unread_only=true&limit=20");
     state.forumUnreadCount=forumSanitizedCount(d?.unread_count);
-    state.forumNotifications=Array.isArray(d?.notifications)?d.notifications:[];
     renderForumNotificationBadge();
     renderForumNotificationLine();
   }catch{}
@@ -1097,8 +1013,6 @@ async function markForumNotificationsRead(){
   try{
     await api("/forum/notifications/read",{method:"POST",body:{}});
     state.forumUnreadCount=0;
-    state.forumNotifications=[];
-    state.forumNotificationsOpen=false;
     renderForumNotificationBadge();
     renderForumNotificationLine();
   }catch(e){toast(e.message||"Không thể đánh dấu thông báo", "error");}
@@ -1107,103 +1021,12 @@ async function markForumNotificationsRead(){
 function renderForumNotificationLine(){
   const line=$("#forumNotificationLine");
   if(!line) return;
-  if(state.forumUnreadCount<1&&!state.forumNotificationsOpen){line.innerHTML="";line.classList.add("hidden");return;}
-  const notifications=Array.isArray(state.forumNotifications)?state.forumNotifications:[];
-  const items=notifications.map(n=>{
-    const notificationId=Number(n?.id)||0;
-    return `<button class="forum-notification-item" type="button" data-forum-notification-id="${notificationId}">
-      <span class="forum-notification-item-title">${escapeHtml(n?.title||"Bài viết Forum")}</span>
-      <span class="forum-notification-item-meta">@${escapeHtml(n?.username||"user")} đã bình luận · ${escapeHtml(forumDate(n?.created_at))}</span>
-      ${n?.comment_preview?`<span class="forum-notification-item-preview">${escapeHtml(n.comment_preview)}</span>`:""}
-      <span class="forum-notification-item-open">Mở bài viết →</span>
-    </button>`;
-  }).join("");
-  line.innerHTML=`<div class="forum-notification-head"><span>🔔 <strong>${state.forumUnreadCount}</strong> thông báo chưa xem</span><button class="forum-notification-read" type="button" id="forumMarkReadBtn">${state.forumUnreadCount>0?"Đánh dấu đã xem":"Đóng"}</button></div>${items?`<div class="forum-notification-items">${items}</div>`:`<div class="forum-notification-empty">Chưa có thông báo mới.</div>`}`;
-  $("#forumMarkReadBtn")?.addEventListener("click",()=>{
-    if(state.forumUnreadCount>0) markForumNotificationsRead();
-    else {state.forumNotificationsOpen=false;renderForumNotificationLine();}
-  });
-  $$('[data-forum-notification-id]',line).forEach(btn=>btn.addEventListener("click",async()=>{
-    const id=Number(btn.dataset.forumNotificationId)||0;
-    const notification=state.forumNotifications.find(n=>Number(n?.id)===id);
-    if(notification) await openForumNotification(notification);
-  }));
-  line.classList.remove("hidden");
-}
-
-async function openForumNotification(notification){
-  const postId=Number(notification?.post_id)||0;
-  const notificationId=Number(notification?.id)||0;
-  const commentId=Number(notification?.comment_id)||0;
-  if(!postId){toast("Thông báo này không còn liên kết tới bài viết.","error");return;}
-  try{
-    // Prevent the normal lazy loader from racing with direct navigation.
-    state.forumNavigatingToPost=true;
-    if(!state.forumExpanded){
-      state.forumExpanded=true;
-      renderForumStrip();
-      await loadForumPosts(false);
-    }else if(!$("#forumPosts")||!state.forumPosts.length){
-      await loadForumPosts(false);
-    }
-
-    // Pause lazy loading while paging directly toward the target post.
-    if(state.forumLoadObserver){state.forumLoadObserver.disconnect();state.forumLoadObserver=null;}
-    let attempts=0;
-    while(!state.forumPosts.some(p=>Number(p?.id)===postId)&&state.forumHasMore&&attempts<1000){
-      const requestSeq=state.forumLoadSeq;
-      const limit=Number(state.forumPageSize)||20;
-      const offset=Number(state.forumNextOffset)||0;
-      const d=await api(`/forum/posts?limit=${limit}&offset=${offset}`);
-      if(requestSeq!==state.forumLoadSeq||!state.forumExpanded){
-        state.forumNavigatingToPost=false;
-        if(state.forumExpanded) renderForumPosts();
-        return;
-      }
-      const incoming=Array.isArray(d?.posts)?d.posts:[];
-      const existingIds=new Set(state.forumPosts.map(p=>Number(p?.id)||0));
-      state.forumPosts=[...state.forumPosts,...incoming.filter(p=>!existingIds.has(Number(p?.id)||0))];
-      const nextOffset=Number(d?.next_offset);
-      state.forumNextOffset=Number.isFinite(nextOffset)?nextOffset:offset+incoming.length;
-      state.forumHasMore=typeof d?.has_more==="boolean"?d.has_more:incoming.length>=limit;
-      attempts++;
-      renderForumPosts();
-      if(!incoming.length) break;
-    }
-
-    if(!state.forumPosts.some(p=>Number(p?.id)===postId)){
-      state.forumNavigatingToPost=false;
-      renderForumPosts();
-      toast("Không tìm thấy bài viết từ thông báo này. Có thể bài viết đã bị xóa.","error");
-      return;
-    }
-
-    state.forumOpenPostId=postId;
-    renderForumPosts();
-    await loadForumComments(postId);
-    state.forumNavigatingToPost=false;
-    renderForumPosts();
-
-    const box=$("#forumPosts");
-    const card=box?.querySelector(`[data-forum-post-id="${CSS.escape(String(postId))}"]`);
-    const target=commentId?card?.querySelector(`[data-forum-comment-id="${CSS.escape(String(commentId))}"]`):null;
-    const scrollTarget=target||card;
-    if(box&&scrollTarget){
-      const boxRect=box.getBoundingClientRect();
-      const targetRect=scrollTarget.getBoundingClientRect();
-      box.scrollTo({top:Math.max(0,box.scrollTop+targetRect.top-boxRect.top-12),behavior:"smooth"});
-      scrollTarget.classList.add(target?"forum-comment-highlight":"forum-post-highlight");
-      window.setTimeout(()=>scrollTarget.classList.remove(target?"forum-comment-highlight":"forum-post-highlight"),2600);
-    }
-
-    if(notificationId){
-      try{await api(`/forum/notifications/${encodeURIComponent(notificationId)}/read`,{method:"POST",body:{}});await refreshForumNotificationCount();}
-      catch(e){console.warn("Could not mark Forum notification read",e);}
-    }
-  }catch(e){
-    state.forumNavigatingToPost=false;
-    if(state.forumExpanded) renderForumPosts();
-    toast(e.message||"Không thể mở bài viết từ thông báo.","error");
+  if(state.forumUnreadCount>0){
+    line.innerHTML=`<span>🔔 <strong>${state.forumUnreadCount}</strong> phản hồi mới cho bài của cậu.</span><button class="forum-notification-read" type="button" id="forumMarkReadBtn">Đã xem</button>`;
+    $("#forumMarkReadBtn")?.addEventListener("click",markForumNotificationsRead);
+    line.classList.remove("hidden");
+  }else{
+    line.innerHTML=""; line.classList.add("hidden");
   }
 }
 
@@ -1259,9 +1082,7 @@ function renderForumStrip(){
   };
   $("#forumBellBtn").onclick=async()=>{
     if(!state.forumExpanded){state.forumExpanded=true;renderForumStrip();await loadForumPosts();}
-    state.forumNotificationsOpen=true;
-    await refreshForumNotificationCount();
-    renderForumNotificationLine();
+    await markForumNotificationsRead();
   };
   $("#forumCreateBtn").onclick=()=>openForumComposerForCreate();
   $("#forumComposeClose").onclick=()=>closeForumComposer();
@@ -1360,11 +1181,6 @@ function bindForumLazyLoad(){
     state.forumLoadObserver=null;
   }
 
-  if(state.forumNavigatingToPost){
-    box.onscroll=null;
-    return;
-  }
-
   // Scroll event remains as a fallback.
   box.onscroll=()=>{
     if(!state.forumLoadFailed &&
@@ -1405,16 +1221,104 @@ function bindForumLazyLoad(){
   }
 }
 
+// Render only the trusted 1x1 Vocemundi republishing counter marker. Forum post text
+// remains escaped; arbitrary HTML from users/RSS is never rendered.
+const forumVocemundiCounterSeen = new Set();
+function forumExtractVocemundiCounter(content, username){
+  if(String(username||"").toLowerCase()!=="vocemundinews") return {visible:String(content||"").trim(),pixelHtml:""};
+  const counters=[];
+  const markerPattern=/\[\[VOCEMUNDI_COUNTER:(https:\/\/vocemundi\.com\/[^\]\s]+)\]\]/gi;
+  const visible=String(content||"").replace(markerPattern,(marker,rawUrl)=>{
+    let parsed;
+    try{parsed=new URL(rawUrl);}catch(_){return marker;}
+    if(parsed.protocol!=="https:" || parsed.hostname!=="vocemundi.com" || parsed.username || parsed.password) return marker;
+    const url=parsed.toString();
+    if(!forumVocemundiCounterSeen.has(url)){
+      forumVocemundiCounterSeen.add(url);
+      counters.push(url);
+    }
+    return "";
+  });
+  const pixelHtml=counters.map(url=>`<img src="${escapeHtml(url)}" width="1" height="1" alt="" aria-hidden="true" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">`).join("");
+  return {visible:visible.trim(),pixelHtml};
+}
+
+// Vocemundi image marker renderer. Markers contain URL-safe base64 JSON generated
+// by the news agent after checking the original raster image is <= 500 KB and its
+// caption identifies a reusable licence. Arbitrary forum HTML remains escaped.
+const FORUM_VOCEMUNDI_MAX_IMAGE_BYTES = 500000;
+function forumIsAllowedVocemundiImageHost(host){
+  const value=String(host||"").toLowerCase().replace(/\.$/,"");
+  return value==="upload.wikimedia.org" || value==="vocemundi.com" || value.endsWith(".vocemundi.com");
+}
+function forumDecodeVocemundiImageMarker(encoded){
+  try{
+    let base=String(encoded||"").replace(/-/g,"+").replace(/_/g,"/");
+    base += "=".repeat((4-base.length%4)%4);
+    const binary=atob(base);
+    const bytes=Uint8Array.from(binary,ch=>ch.charCodeAt(0));
+    const decoded=new TextDecoder("utf-8",{fatal:true}).decode(bytes);
+    return JSON.parse(decoded);
+  }catch(_){return null;}
+}
+function forumExtractVocemundiImages(content, username){
+  if(String(username||"").toLowerCase()!=="vocemundinews") return {visible:String(content||"").trim(),imageHtml:""};
+  const images=[];
+  const seen=new Set();
+  const markerPattern=/\[\[VOCEMUNDI_IMAGE:v1:([A-Za-z0-9_\-=]+)\]\]/g;
+  const visible=String(content||"").replace(markerPattern,(marker,encoded)=>{
+    const data=forumDecodeVocemundiImageMarker(encoded);
+    if(!data || typeof data!=="object") return marker;
+    let parsed;
+    try{parsed=new URL(String(data.url||""));}catch(_){return marker;}
+    const byteSize=Number(data.bytes||0);
+    const licence=String(data.license||"");
+    if(parsed.protocol!=="https:" || parsed.username || parsed.password ||
+       !forumIsAllowedVocemundiImageHost(parsed.hostname) ||
+       !Number.isFinite(byteSize) || byteSize<1 || byteSize>FORUM_VOCEMUNDI_MAX_IMAGE_BYTES ||
+       !(/\bCC\s*BY(?:\s*-\s*(?:SA|ND))?\s*[2-4](?:\.0)?\b|\bCC0(?:\s*1\.0)?\b|\bPublic Domain\b|\bAI illustration\b/i.test(licence))){
+      return marker;
+    }
+    const key=parsed.toString();
+    if(!seen.has(key)){
+      seen.add(key);
+      images.push({
+        url:key,
+        alt:String(data.alt||"Vocemundi article image").slice(0,500),
+        caption:String(data.caption||"").slice(0,1500),
+        credit:String(data.credit||"See source caption").slice(0,500),
+        license:licence.slice(0,160),
+        bytes:byteSize
+      });
+    }else{
+      // A repeated marker in one page is hidden from visible text without duplicating the image.
+    }
+    return "";
+  });
+  const imageHtml=images.map(item=>{
+    const key=escapeHtml(item.url);
+    const alt=escapeHtml(item.alt);
+    const caption=item.caption.trim()?`<figcaption class="forum-post-image-caption">${escapeHtml(item.caption)}</figcaption>`:"";
+    const credit=`<div class="forum-post-image-credit">Ảnh: ${escapeHtml(item.credit)} · Giấy phép: ${escapeHtml(item.license)} · <a href="${key}" target="_blank" rel="noopener noreferrer">Mở ảnh gốc</a></div>`;
+    return `<figure class="forum-post-media"><a class="forum-post-image-link" href="${key}" target="_blank" rel="noopener noreferrer"><img class="forum-post-image" src="${key}" alt="${alt}" loading="lazy" decoding="async" referrerpolicy="no-referrer"></a>${caption}${credit}</figure>`;
+  }).join("");
+  return {visible:visible.trim(),imageHtml};
+}
+
 function forumPostPreviewHtml(post){
-  const full=String(post.content||"");
+  const tracked=forumExtractVocemundiCounter(post.content||"",post.username);
+  const media=forumExtractVocemundiImages(tracked.visible,post.username);
+  const full=media.visible;
+  const pixelHtml=tracked.pixelHtml;
+  const imageHtml=media.imageHtml;
   const words=full.trim() ? full.trim().split(/\s+/) : [];
   const id=Number(post.id||0);
   const expanded=!!state.forumExpandedPostContentIds[id];
   if(words.length<=100 || expanded){
-    return `<div class="forum-post-content">${escapeHtml(full)}</div>${words.length>100?`<button type="button" class="forum-post-content-toggle" data-forum-content-toggle="${id}">Thu gọn</button>`:""}`;
+    return `${imageHtml}<div class="forum-post-content">${escapeHtml(full)}</div>${pixelHtml}${words.length>100?`<button type="button" class="forum-post-content-toggle" data-forum-content-toggle="${id}">Thu gọn</button>`:""}`;
   }
   const preview=words.slice(0,100).join(" ");
-  return `<div class="forum-post-content">${escapeHtml(preview)}…</div><button type="button" class="forum-post-content-toggle" data-forum-content-toggle="${id}">Xem thêm</button>`;
+  return `${imageHtml}<div class="forum-post-content">${escapeHtml(preview)}…</div>${pixelHtml}<button type="button" class="forum-post-content-toggle" data-forum-content-toggle="${id}">Xem thêm</button>`;
 }
 
 function renderForumPosts(){
@@ -1462,7 +1366,7 @@ function renderForumPosts(){
 }
 
 function renderForumComments(post,comments){
-  return `<div class="forum-comments">${comments.length?comments.map(c=>`<div class="forum-comment" data-forum-comment-id="${Number(c.id)||0}"><div class="forum-comment-author">@${escapeHtml(c.username||"user")}</div><div class="forum-comment-text">${escapeHtml(c.content||"")}</div><small class="forum-comment-date">${escapeHtml(forumDate(c.created_at))}</small></div>`).join(""):`<div class="forum-empty" style="padding:8px">Chưa có bình luận. Hãy là người đầu tiên trả lời.</div>`}
+  return `<div class="forum-comments">${comments.length?comments.map(c=>`<div class="forum-comment"><div class="forum-comment-author">@${escapeHtml(c.username||"user")}</div><div class="forum-comment-text">${escapeHtml(c.content||"")}</div><small class="forum-comment-date">${escapeHtml(forumDate(c.created_at))}</small></div>`).join(""):`<div class="forum-empty" style="padding:8px">Chưa có bình luận. Hãy là người đầu tiên trả lời.</div>`}
     <div class="forum-comment-compose">
       <div class="forum-emoji-wrap">
         <textarea id="forumCommentInput-${Number(post.id)}" class="forum-comment-input" data-forum-comment-input="${Number(post.id)}" maxlength="3000" rows="2" placeholder="Viết bình luận…"></textarea>
@@ -1637,7 +1541,7 @@ function renderAppShell() {
     $("#learnerMenuBtn")?.setAttribute("aria-expanded", "false");
     openLearnerPanel(btn.dataset.panel);
   }));
-  loadAdminUnreadBadge();
+  startAdminUnreadPolling();
   renderForumStrip();
   startForumPolling();
   $("#courseSelect")?.addEventListener("change", async e => {
@@ -1655,9 +1559,6 @@ function renderAppShell() {
   });
 }
 function openLearnerPanel(view) {
-  // Panel chat polling is allowed only while the Admin chat panel is active.
-  window.clearInterval(window.__adminPoll);
-  window.__adminPoll=null;
   const panel = $("#profilePanel");
   if (!panel) return;
   const titles = {curriculum:"Giáo trình",plan:"Lộ trình học",review:"Nội dung ôn tập",admin:"Chat với admin",packages:"Gói học",settings:"Cấu hình học tập"};
@@ -1667,7 +1568,7 @@ function openLearnerPanel(view) {
   const el = $("#profilePanelContent");
   Promise.resolve({curriculum:renderCurriculum,plan:renderPlan,review:renderReview,admin:renderAdmin,packages:renderPackages,settings:renderSettings}[view]?.(el)).catch(e => { el.innerHTML = `<div class="empty-state error">${escapeHtml(e.message)}</div>`; });
 }
-function closeLearnerPanel() { const p=$("#profilePanel"); if(!p)return; p.classList.add("hidden"); p.setAttribute("aria-hidden","true"); window.clearInterval(window.__adminPoll); window.__adminPoll=null; }
+function closeLearnerPanel() { const p=$("#profilePanel"); if(!p)return; p.classList.add("hidden"); p.setAttribute("aria-hidden","true"); window.clearInterval(window.__adminPoll); }
 function navItem(view, icon, label) { return `<button class="side-nav-item ${state.view===view?"active":""}" data-view="${view}"><span>${icon}</span>${label}</button>`; }
 function titleFor(v) { return ({chat:"Học cùng Doraemon",catalog:"Khóa học & nội dung",plan:"Lộ trình học",review:"Ôn tập",packages:"Gói học",admin:"Chat với Admin",settings:"Cấu hình"})[v] || "Doraemon"; }
 
@@ -2451,32 +2352,7 @@ async function renderPackages(el){
 }
 
 
-async function renderAdmin(el){
-  window.__adminChatOpenedSinceLoad=true;
-  const data=await api("/admin-chat/history?limit=200&mark_read=true");
-  // The user may have switched to another panel while this request was pending.
-  if(!el?.isConnected || !document.getElementById("profilePanelContent")?.contains(el)) return;
-  clearAdminUnreadBadgeLocally();
-  el.innerHTML=`<div class="page-card admin-card"><div class="card-head"><div><strong>Chat với Admin</strong><small>HTTP polling bảo đảm hoạt động cả khi WebSocket bị gián đoạn</small></div><span class="status-dot">● Đang hoạt động</span></div><div class="admin-messages" id="adminMessages">${(data.messages||[]).map(renderAdminMessage).join("")}</div><div class="admin-composer"><input id="adminInput" placeholder="Nhắn tin cho Admin…"><button class="send-button" id="adminSend">➤</button></div></div>`;
-  const list=$("#adminMessages");
-  list.scrollTop=list.scrollHeight;
-  $("#adminSend").onclick=sendAdmin;
-  $("#adminInput").addEventListener("keydown",e=>{if(e.key==='Enter')sendAdmin();});
-  window.clearInterval(window.__adminPoll);
-  // Preserve the existing 3.5-second chat polling interval, but only while
-  // this panel remains open and mounted. Badge polling is intentionally absent.
-  window.__adminPoll=setInterval(async()=>{
-    if(!el.isConnected || !document.getElementById("profilePanelContent")?.contains(el) || document.getElementById("profilePanel")?.classList.contains("hidden")){
-      window.clearInterval(window.__adminPoll);window.__adminPoll=null;return;
-    }
-    try{
-      const d=await api("/admin-chat/history?limit=200&mark_read=true");
-      list.innerHTML=(d.messages||[]).map(renderAdminMessage).join("");
-      list.scrollTop=list.scrollHeight;
-    }catch{}
-  },3500);
-}
-
+async function renderAdmin(el){const data=await api("/admin-chat/history?limit=200&mark_read=true"); el.innerHTML=`<div class="page-card admin-card"><div class="card-head"><div><strong>Chat với Admin</strong><small>HTTP polling bảo đảm hoạt động cả khi WebSocket bị gián đoạn</small></div><span class="status-dot">● Đang hoạt động</span></div><div class="admin-messages" id="adminMessages">${(data.messages||[]).map(renderAdminMessage).join("")}</div><div class="admin-composer"><input id="adminInput" placeholder="Nhắn tin cho Admin…"><button class="send-button" id="adminSend">➤</button></div></div>`; const list=$("#adminMessages"); list.scrollTop=list.scrollHeight; $("#adminSend").onclick=sendAdmin; $("#adminInput").addEventListener("keydown",e=>{if(e.key==='Enter')sendAdmin();}); window.clearInterval(window.__adminPoll); window.__adminPoll=setInterval(async()=>{try{const d=await api("/admin-chat/history?limit=200&mark_read=true");list.innerHTML=(d.messages||[]).map(renderAdminMessage).join("");list.scrollTop=list.scrollHeight; await refreshAdminUnreadBadge();}catch{}},3500); await refreshAdminUnreadBadge();}
 function renderAdminMessage(m){return `<div class="admin-msg ${m.sender==='user'?'me':''}"><div class="admin-msg-author">${m.sender==='user'?'Bạn':'Admin'}</div><div class="admin-msg-body">${nl2br(m.message||"")}</div><small>${escapeHtml(fmtDate(m.created_at))}</small></div>`;}
 async function sendAdmin(){const input=$("#adminInput"); const msg=input?.value.trim(); if(!msg)return; input.value=""; try{await api("/admin-chat/send",{method:"POST",body:{client_message_id:(crypto.randomUUID?crypto.randomUUID():`${Date.now()}-${Math.random()}`),message:msg}});const d=await api("/admin-chat/history?limit=200");$("#adminMessages").innerHTML=(d.messages||[]).map(renderAdminMessage).join("");$("#adminMessages").scrollTop=$("#adminMessages").scrollHeight;}catch(e){toast(e.message,"error");}}
 
@@ -2498,7 +2374,6 @@ async function boot(){
   $("#navAuthBtn").onclick=()=>state.token?location.hash="#/app":openAuth("login");
   $("#heroAuthBtn").onclick=()=>openAuth("register");
   loadAppDownloadConfig();
-  initDoraemonGoogleAnalytics();
   authForm.addEventListener("submit",async e=>{
     e.preventDefault();
     const mode=authForm.dataset.mode||"login";
@@ -2542,7 +2417,6 @@ async function boot(){
   });
   setAuthMode("login");
   window.addEventListener("hashchange",async ()=>{
-    trackDoraemonAnalyticsPageView();
     if(isResetPasswordRoute()) {
       if(state.token) { setToken("", null); state.token=""; state.profile=null; }
       renderLanding();
